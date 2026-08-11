@@ -1,0 +1,45 @@
+# ROS 2 generated workspace state
+build/
+install/
+log/
+.colcon/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# C/C++ generated files
+*.o
+*.so
+*.a
+*.d
+
+# ROS bags and recorded data
+*.bag
+*.db3
+*.mcap
+rosbag2_*/
+bags/
+recordings/
+
+# Local environment and editor files
+.env
+.env.*
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Notebook checkpoints and scratch artifacts
+.ipynb_checkpoints/
+*.tmp
+*.bak
+
+# OS metadata
+.DS_Store
+Thumbs.db

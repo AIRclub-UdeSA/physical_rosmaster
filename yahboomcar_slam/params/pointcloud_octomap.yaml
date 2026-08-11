@@ -1,0 +1,17 @@
+pointcloud_mapping_node:
+    ros__parameters:
+        topicColor: "/RGBD/RGB/Image"
+        topicDepth: "/RGBD/Depth/Image"
+        topicTcw: "/RGBD/CameraPose"
+        local_frame_id: "camera"
+        global_frame_id: "world"
+        fx: 615.50506
+        fy: 623.69024
+        cx: 365.84388
+        cy: 238.778
+        resolution: 0.01
+        depthfactor: 1000.0
+        queueSize: 10
+        buseExact: false
+        use_viewer: false
+
