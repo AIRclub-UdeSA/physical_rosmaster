@@ -68,7 +68,7 @@ colcon list --base-paths physical_rosmaster
 
 ## Odometry Status
 
-The current physical X3 odometry path needs correction and validation.
+The physical X3 odometry path still needs hardware validation.
 
 Current flow:
 
@@ -78,11 +78,12 @@ Current flow:
 - `yahboomcar_base_node/src/base_node_X3.cpp` integrates `vel_raw` into `/odom_raw`.
 - `robot_localization` fuses `/odom_raw` and `/imu/data`, remapping `/odometry/filtered` to `/odom`.
 
-The local source does not prove that `/odom_raw` is computed from four wheel encoder position deltas. The next step is to inspect the exact `Rosmaster_Lib` used on the robot and determine what `get_motion_data()` returns.
+The local source does not prove that `/odom_raw` is computed from four wheel encoder position deltas. The next step is to inspect the exact `Rosmaster_Lib` used on the robot and determine what `get_motion_data()` returns. Public Yahboom docs list a `get_motor_encoder()` API, so encoder-position odometry may be possible if the deployed library exposes usable wheel counts.
 
-Known immediate issue:
+Fixed locally:
 
-- `base_node_X3.cpp` assigns `odom.twist.twist.linear.y` and then overwrites it with `0.0`, suppressing lateral mecanum velocity in the published odometry twist.
+- `base_node_X3.cpp` now preserves lateral mecanum velocity in the published odometry twist.
+- The X3 base node initializes its previous timestamp, uses the node clock consistently, and uses the declared odom/base frame parameters in odometry and TF output.
 
 ## Development Notes
 

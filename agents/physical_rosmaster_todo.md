@@ -11,6 +11,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Record the first audit in `agents/rosmaster_physical_audit.md`.
 - [x] Decide not to split every package into separate repos.
 - [x] Decide to keep simulator and physical code separate.
+- [x] Add a focused X3 odometry regression test and fix the local lateral twist publication bug.
 
 ## Phase 1: Create The Physical Repo Boundary
 
@@ -28,6 +29,8 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 ## Phase 2: Inspect `Rosmaster_Lib`
 
 - [ ] Locate the exact `Rosmaster_Lib` used on the robot host and copied into the container.
+- [x] Confirm `Rosmaster_Lib` is not vendored in this repo and is not importable on this workstation.
+- [x] Check public Yahboom driver docs for motion/encoder APIs; docs list `get_motion_data()` and `get_motor_encoder()`.
 - [ ] Inspect `Rosmaster_Lib.Rosmaster.get_motion_data()`.
 - [ ] Determine whether `get_motion_data()` returns:
   - command echo,
@@ -45,14 +48,15 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 
 ## Phase 3: Fix Immediate Physical Odometry Bugs
 
-- [ ] Add a focused test or small replay harness for `base_node_X3` odometry behavior.
-- [ ] Fix `yahboomcar_base_node/src/base_node_X3.cpp` so `odom.twist.twist.linear.y` is not overwritten to `0.0`.
-- [ ] Initialize `last_vel_time_` correctly so the first `dt` is not invalid.
-- [ ] Use node clock consistently instead of constructing a fresh `rclcpp::Clock`.
-- [ ] Respect the declared `odom_frame` and `base_footprint_frame` parameters instead of hardcoding frame strings.
+- [x] Add a focused test or small replay harness for `base_node_X3` odometry behavior.
+- [x] Fix `yahboomcar_base_node/src/base_node_X3.cpp` so `odom.twist.twist.linear.y` is not overwritten to `0.0`.
+- [x] Initialize `last_vel_time_` correctly so the first `dt` is not invalid.
+- [x] Use node clock consistently instead of constructing a fresh `rclcpp::Clock`.
+- [x] Respect the declared `odom_frame` and `base_footprint_frame` parameters instead of hardcoding frame strings.
 - [ ] Add a velocity timeout/safe behavior if `vel_raw` stops.
 - [ ] Review covariance values. If odom is velocity-integrated and not encoder-position-derived, use covariance that reflects that uncertainty.
-- [ ] Rebuild `yahboomcar_base_node` and verify `/odom_raw` twist and pose during forward, strafe, and rotate commands.
+- [x] Rebuild `yahboomcar_base_node` and run the focused X3 odometry regression locally.
+- [ ] Verify `/odom_raw` twist and pose on the robot during forward, strafe, and rotate commands.
 
 ## Phase 4: Implement Correct Real Odometry If Hardware Allows
 
