@@ -26,6 +26,10 @@ rosbag2_*/
 bags/
 recordings/
 
+# Large third-party/generated SLAM artifacts kept outside Git
+yahboomcar_slam/params/ORBvoc.txt
+yahboomcar_slam/pcl/*.pcd
+
 # Local environment and editor files
 .env
 .env.*

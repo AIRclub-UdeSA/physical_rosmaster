@@ -66,6 +66,10 @@ To verify package discovery from this repository boundary:
 colcon list --base-paths physical_rosmaster
 ```
 
+## Large Local Artifacts
+
+`yahboomcar_slam/params/ORBvoc.txt` and `yahboomcar_slam/pcl/*.pcd` are intentionally excluded from Git. Keep them locally on robot workspaces that need ORB-SLAM or point-cloud examples; use Git LFS or an external download step if these files need to be shared later.
+
 ## Odometry Status
 
 The physical X3 odometry path still needs hardware validation.
