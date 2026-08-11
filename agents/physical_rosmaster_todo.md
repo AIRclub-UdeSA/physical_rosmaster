@@ -15,6 +15,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Download and inspect public Yahboom `Rosmaster_Lib` V3.3.9 reference without vendoring it.
 - [x] Add workstation-vs-robot workflow docs for cloning, building, and validating on the robot.
 - [x] Add a robot-side `Rosmaster_Lib` probe script for hash and encoder/motion sampling.
+- [x] Add a GitHub Release based restore workflow for optional large SLAM/PCD artifacts.
 
 ## Phase 1: Create The Physical Repo Boundary
 
@@ -25,6 +26,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Add a root `README.md` explaining that this is the physical ROSMASTER X3 workspace, separate from `AIRclub-UdeSA/yahboom_rosmaster`.
 - [x] Add provenance notes: Yahboom-derived packages, local modifications, added `sllidar_ros2`, ignored packages, Docker/Humble target.
 - [ ] Decide license policy before public GitHub upload. Most local packages still say `TODO: License declaration`; do not publish publicly until this is clear.
+- [x] User approved making `AIRclub-UdeSA/physical_rosmaster` public; keep README provenance/license caveat visible because upstream Yahboom repository has no GitHub-detected license.
 - [x] Initialize Git in `physical_rosmaster`.
 - [x] Create the GitHub repo as private: `AIRclub-UdeSA/physical_rosmaster`.
 - [x] Push an initial snapshot branch after `.gitignore`, README, and provenance notes exist.
@@ -104,6 +106,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
   - keep ignored and document,
   - remove from repo,
   - or repair later.
+- [x] Document how to restore ignored large artifacts from GitHub Releases.
 - [ ] Add a minimal CI build job if feasible for ROS 2 Humble.
 - [ ] Tag the first known-working physical snapshot after robot validation.
 

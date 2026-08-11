@@ -72,11 +72,20 @@ Use the workstation for Git, source review, and hardware-free tests. Use the rob
 
 - Workstation and clone-to-robot guide: `docs/workstation_and_robot_workflow.md`
 - Odometry validation plan: `docs/odometry_validation.md`
+- Large artifact restore notes: `docs/large_artifacts.md`
 - Robot-side library probe: `tools/rosmaster_lib_probe.py`
 
 ## Large Local Artifacts
 
 `yahboomcar_slam/params/ORBvoc.txt` and `yahboomcar_slam/pcl/*.pcd` are intentionally excluded from Git. Keep them locally on robot workspaces that need ORB-SLAM or point-cloud examples; use Git LFS or an external download step if these files need to be shared later.
+
+To restore the current optional artifact bundle from GitHub Releases:
+
+```bash
+tools/fetch_large_artifacts.sh
+```
+
+Details, checksums, and manual download commands are in `docs/large_artifacts.md`.
 
 ## Odometry Status
 
@@ -109,4 +118,4 @@ Working notes and task tracking live in `agents/`:
 
 ## Publishing Caveat
 
-Most package manifests still contain `TODO: Package description` and `TODO: License declaration`. Treat this as a private or internal repo until package provenance and licensing are cleaned up.
+Most package manifests still contain `TODO: Package description` and `TODO: License declaration`. This repository includes Yahboom-derived source and a vendored copy of `sllidar_ros2`; do not treat the whole repository as having one clean open-source license until package provenance and licensing are cleaned up.
