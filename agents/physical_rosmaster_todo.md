@@ -12,6 +12,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Decide not to split every package into separate repos.
 - [x] Decide to keep simulator and physical code separate.
 - [x] Add a focused X3 odometry regression test and fix the local lateral twist publication bug.
+- [x] Download and inspect public Yahboom `Rosmaster_Lib` V3.3.9 reference without vendoring it.
 
 ## Phase 1: Create The Physical Repo Boundary
 
@@ -28,17 +29,14 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 
 ## Phase 2: Inspect `Rosmaster_Lib`
 
-- [ ] Locate the exact `Rosmaster_Lib` used on the robot host and copied into the container.
+- [ ] Locate the exact `Rosmaster_Lib` used on the robot host and copied into the container; compare its SHA256 against the public V3.3.9 reference.
 - [x] Confirm `Rosmaster_Lib` is not vendored in this repo and is not importable on this workstation.
 - [x] Check public Yahboom driver docs for motion/encoder APIs; docs list `get_motion_data()` and `get_motor_encoder()`.
-- [ ] Inspect `Rosmaster_Lib.Rosmaster.get_motion_data()`.
-- [ ] Determine whether `get_motion_data()` returns:
-  - command echo,
-  - firmware-estimated chassis velocity,
-  - encoder-derived chassis velocity,
-  - or some other decoded serial packet.
-- [ ] Search `Rosmaster_Lib` for encoder/tick APIs such as wheel position, motor encoder, pulse count, RPM, or raw motor feedback.
-- [ ] Record the serial packet fields used for motion feedback.
+- [x] Inspect public V3.3.9 `Rosmaster_Lib.Rosmaster.get_motion_data()`.
+- [x] Determine that public V3.3.9 `get_motion_data()` returns cached firmware/controller speed feedback from `FUNC_REPORT_SPEED`, not a direct Python echo of `cmd_vel`.
+- [x] Search public V3.3.9 `Rosmaster_Lib` for encoder/tick APIs; `get_motor_encoder()` returns four cached signed 32-bit motor encoder counters.
+- [x] Record the public V3.3.9 serial packet fields used for motion and encoder feedback in `agents/rosmaster_lib_public_v3_3_9.md`.
+- [ ] Determine whether the firmware speed packet itself is encoder-derived, command-derived, IMU-assisted, or another controller estimate.
 - [ ] Run a hardware check comparing `/cmd_vel` and `vel_raw` while:
   - robot is lifted,
   - robot is on the floor,

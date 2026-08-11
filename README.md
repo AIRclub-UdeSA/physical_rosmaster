@@ -84,6 +84,8 @@ Current flow:
 
 The local source does not prove that `/odom_raw` is computed from four wheel encoder position deltas. The next step is to inspect the exact `Rosmaster_Lib` used on the robot and determine what `get_motion_data()` returns. Public Yahboom docs list a `get_motor_encoder()` API, so encoder-position odometry may be possible if the deployed library exposes usable wheel counts.
 
+A public Yahboom `Rosmaster_Lib` V3.3.9 reference was inspected from the official download bundle. In that version, `get_motion_data()` returns cached serial feedback from the controller's speed report packet, while `get_motor_encoder()` exposes four cached motor encoder counters. This means the current physical path is better described as firmware velocity integration, not confirmed wheel-position odometry. See `agents/rosmaster_lib_public_v3_3_9.md`.
+
 Fixed locally:
 
 - `base_node_X3.cpp` now preserves lateral mecanum velocity in the published odometry twist.
@@ -95,6 +97,7 @@ Working notes and task tracking live in `agents/`:
 
 - `agents/rosmaster_physical_audit.md`
 - `agents/physical_rosmaster_todo.md`
+- `agents/rosmaster_lib_public_v3_3_9.md`
 
 ## Publishing Caveat
 
