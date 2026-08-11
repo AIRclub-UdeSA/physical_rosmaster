@@ -10,6 +10,8 @@ Use the workstation for source review, Git work, tests that do not need hardware
 
 Use the robot/container for hardware checks: `Rosmaster_Lib`, serial devices, camera, LiDAR, `/cmd_vel`, `/vel_raw`, `/joint_states`, `/odom_raw`, `/odom`, and autostart validation.
 
+If a coding agent is running on the robot, start with `context.md`.
+
 ## Outside The Robot
 
 Clone and work from a normal ROS 2 workspace:
@@ -190,3 +192,5 @@ ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
 ```
 
 Future cleanup: move `/root/auto_start.sh`, `/usr/local/bin/start_rosmaster.sh`, systemd units, and udev rules into versioned files in this repo.
+
+The current setup/autostart procedure is documented in `docs/setup_guide_ros2_humble_autostart.md`.

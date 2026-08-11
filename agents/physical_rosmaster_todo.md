@@ -16,6 +16,8 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Add workstation-vs-robot workflow docs for cloning, building, and validating on the robot.
 - [x] Add a robot-side `Rosmaster_Lib` probe script for hash and encoder/motion sampling.
 - [x] Add a GitHub Release based restore workflow for optional large SLAM/PCD artifacts.
+- [x] Add root `context.md` for coding agents working inside the robot/container.
+- [x] Consolidate the original ROS 2 Humble/autostart setup guide into repo docs.
 
 ## Phase 1: Create The Physical Repo Boundary
 

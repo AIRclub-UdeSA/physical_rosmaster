@@ -8,9 +8,7 @@ This repository is intentionally separate from the simulator repository, `AIRclu
 
 This repo is a curated boundary around the physical robot source tree that was previously used directly as `/root/yahboomcar_ws/src` inside the `rosmaster_humble` Docker container.
 
-The setup guide currently lives outside this repo at:
-
-`/home/juan/Downloads/Guia ros2 humble y autostart.md`
+The original setup notes have been consolidated into `docs/setup_guide_ros2_humble_autostart.md`.
 
 Important deployment assumptions from that guide:
 
@@ -71,9 +69,11 @@ colcon list --base-paths physical_rosmaster
 Use the workstation for Git, source review, and hardware-free tests. Use the robot/container for `Rosmaster_Lib`, serial devices, camera, LiDAR, and odometry validation.
 
 - Workstation and clone-to-robot guide: `docs/workstation_and_robot_workflow.md`
+- ROS 2 Humble setup and autostart guide: `docs/setup_guide_ros2_humble_autostart.md`
 - Odometry validation plan: `docs/odometry_validation.md`
 - Large artifact restore notes: `docs/large_artifacts.md`
 - Robot-side library probe: `tools/rosmaster_lib_probe.py`
+- Coding-agent context for robot-side work: `context.md`
 
 ## Large Local Artifacts
 
@@ -115,6 +115,8 @@ Working notes and task tracking live in `agents/`:
 - `agents/rosmaster_physical_audit.md`
 - `agents/physical_rosmaster_todo.md`
 - `agents/rosmaster_lib_public_v3_3_9.md`
+
+Robot-side coding-agent context lives in `context.md`.
 
 ## License Caveat
 
