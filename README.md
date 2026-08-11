@@ -116,6 +116,6 @@ Working notes and task tracking live in `agents/`:
 - `agents/physical_rosmaster_todo.md`
 - `agents/rosmaster_lib_public_v3_3_9.md`
 
-## Publishing Caveat
+## License Caveat
 
 Most package manifests still contain `TODO: Package description` and `TODO: License declaration`. This repository includes Yahboom-derived source and a vendored copy of `sllidar_ros2`; do not treat the whole repository as having one clean open-source license until package provenance and licensing are cleaned up.
