@@ -23,8 +23,8 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Add provenance notes: Yahboom-derived packages, local modifications, added `sllidar_ros2`, ignored packages, Docker/Humble target.
 - [ ] Decide license policy before public GitHub upload. Most local packages still say `TODO: License declaration`; do not publish publicly until this is clear.
 - [x] Initialize Git in `physical_rosmaster`.
-- [ ] Create the GitHub repo, likely private first.
-- [ ] Push an initial snapshot branch after `.gitignore`, README, and provenance notes exist.
+- [x] Create the GitHub repo as private: `AIRclub-UdeSA/physical_rosmaster`.
+- [x] Push an initial snapshot branch after `.gitignore`, README, and provenance notes exist.
 
 ## Phase 2: Inspect `Rosmaster_Lib`
 
