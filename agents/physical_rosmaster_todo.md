@@ -13,6 +13,8 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Decide to keep simulator and physical code separate.
 - [x] Add a focused X3 odometry regression test and fix the local lateral twist publication bug.
 - [x] Download and inspect public Yahboom `Rosmaster_Lib` V3.3.9 reference without vendoring it.
+- [x] Add workstation-vs-robot workflow docs for cloning, building, and validating on the robot.
+- [x] Add a robot-side `Rosmaster_Lib` probe script for hash and encoder/motion sampling.
 
 ## Phase 1: Create The Physical Repo Boundary
 

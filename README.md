@@ -66,6 +66,14 @@ To verify package discovery from this repository boundary:
 colcon list --base-paths physical_rosmaster
 ```
 
+## Workflows
+
+Use the workstation for Git, source review, and hardware-free tests. Use the robot/container for `Rosmaster_Lib`, serial devices, camera, LiDAR, and odometry validation.
+
+- Workstation and clone-to-robot guide: `docs/workstation_and_robot_workflow.md`
+- Odometry validation plan: `docs/odometry_validation.md`
+- Robot-side library probe: `tools/rosmaster_lib_probe.py`
+
 ## Large Local Artifacts
 
 `yahboomcar_slam/params/ORBvoc.txt` and `yahboomcar_slam/pcl/*.pcd` are intentionally excluded from Git. Keep them locally on robot workspaces that need ORB-SLAM or point-cloud examples; use Git LFS or an external download step if these files need to be shared later.
