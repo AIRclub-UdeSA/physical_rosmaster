@@ -84,7 +84,7 @@ Conclusion:
 - Whether `vel_raw` is merely echoing commanded velocity or a firmware-estimated velocity depends on `Rosmaster_Lib.get_motion_data()`, which is outside this repository. The local source does not show wheel tick/position/encoder delta odometry.
 - Fixed locally: the X3 odometry message path now preserves lateral `linear.y`, initializes `last_vel_time_`, uses the node clock, and uses the declared `odom_frame` / `base_footprint_frame` parameters for odometry and TF.
 - Still open: there is no timeout/safe stop in `base_node_X3.cpp` if `vel_raw` stops arriving.
-- Public Yahboom docs list both `get_motion_data()` and `get_motor_encoder()`, but the exact deployed `Rosmaster_Lib` still needs to be copied from the robot before we rely on encoder availability.
+- Public Yahboom docs list both `get_motion_data()` and `get_motor_encoder()`, and on `x3-c` the deployed `Rosmaster_Lib` has now been verified to match public V3.3.9. The remaining question is whether the exposed encoder counters are stable and useful enough for odometry.
 
 Simulator contrast:
 
@@ -112,6 +112,6 @@ Practical options:
 1. Add root `.gitignore` and README/provenance notes.
 2. Decide whether to preserve vendor package names initially or migrate toward `yahboom_rosmaster_*`.
 3. Validate the fixed X3 odometry publication on the physical robot during forward, strafe, and rotate commands.
-4. Determine from the exact deployed `Rosmaster_Lib` whether encoder positions are available. If yes, implement real wheel-state odometry matching simulator semantics. If no, label current odom as firmware/command-velocity odom with higher covariance and do not treat it as encoder odometry.
+4. Determine from the verified deployed `Rosmaster_Lib` whether encoder positions are available and stable enough for odometry. If yes, implement real wheel-state odometry matching simulator semantics. If no, label current odom as firmware/command-velocity odom with higher covariance and do not treat it as encoder odometry.
 5. Replace `/dev/ttyUSB*` and `/dev/video0` in guide/autostart with udev symlinks.
 6. Add minimal build/launch tests for bringup and odometry math before pushing public code.

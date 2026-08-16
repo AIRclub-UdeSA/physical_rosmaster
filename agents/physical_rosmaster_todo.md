@@ -15,6 +15,8 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Download and inspect public Yahboom `Rosmaster_Lib` V3.3.9 reference without vendoring it.
 - [x] Add workstation-vs-robot workflow docs for cloning, building, and validating on the robot.
 - [x] Add a robot-side `Rosmaster_Lib` probe script for hash and encoder/motion sampling.
+- [x] Verify the installed `Rosmaster_Lib` on `x3-c` matches public V3.3.9 exactly.
+- [x] Capture a stationary `Rosmaster_Lib` probe on `x3-c` with stable zero motion and stable encoder counters.
 - [x] Add a GitHub Release based restore workflow for optional large SLAM/PCD artifacts.
 - [x] Add root `context.md` for coding agents working inside the robot/container.
 - [x] Consolidate the original ROS 2 Humble/autostart setup guide into repo docs.
@@ -35,7 +37,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 
 ## Phase 2: Inspect `Rosmaster_Lib`
 
-- [ ] Locate the exact `Rosmaster_Lib` used on the robot host and copied into the container; compare its SHA256 against the public V3.3.9 reference.
+- [x] Locate the exact `Rosmaster_Lib` used on the robot host and copied into the container; compare its SHA256 against the public V3.3.9 reference.
 - [x] Confirm `Rosmaster_Lib` is not vendored in this repo and is not importable on this workstation.
 - [x] Check public Yahboom driver docs for motion/encoder APIs; docs list `get_motion_data()` and `get_motor_encoder()`.
 - [x] Inspect public V3.3.9 `Rosmaster_Lib.Rosmaster.get_motion_data()`.
@@ -43,7 +45,10 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Search public V3.3.9 `Rosmaster_Lib` for encoder/tick APIs; `get_motor_encoder()` returns four cached signed 32-bit motor encoder counters.
 - [x] Record the public V3.3.9 serial packet fields used for motion and encoder feedback in `agents/rosmaster_lib_public_v3_3_9.md`.
 - [ ] Determine whether the firmware speed packet itself is encoder-derived, command-derived, IMU-assisted, or another controller estimate.
-- [ ] Run a hardware check comparing `/cmd_vel` and `vel_raw` while:
+- [x] Run a lifted hardware check showing the encoder counters and motion packet respond to `/cmd_vel` while:
+  - robot is lifted,
+  - `/cmd_vel` is stopped.
+- [ ] Run the remaining hardware check comparing `/cmd_vel` and `vel_raw` while:
   - robot is lifted,
   - robot is on the floor,
   - one wheel is resisted or slipping,
@@ -97,6 +102,11 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [ ] Add startup checks for required devices before launching lidar/camera/driver nodes.
 - [ ] Add graceful shutdown behavior that sends zero velocity before stopping the driver stack.
 - [ ] Add log rotation notes for long-running robot use.
+
+## Incident Notes
+
+- The 2026-08-16 `x3-c` setup incident surfaced a host-side `runc` corruption, a duplicate-package backup-tree mistake, a stale `install/` tree after a failed package build, and a missing-optional-artifact build assumption in `yahboomcar_slam`.
+- The optional `pcl` install guard has been added so a clean clone can build without restoring the large artifact bundle first.
 
 ## Phase 7: Cleanup And Publishability
 

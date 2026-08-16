@@ -4,6 +4,8 @@ ROS 2 Humble source workspace for the physical Yahboom ROSMASTER X3 mecanum robo
 
 This repository contains the robot-side packages, launch files, descriptions, hardware drivers, navigation/SLAM configuration, and setup notes needed to run the real robot. It is meant to be cloned into a ROS 2 workspace, usually inside the `rosmaster_humble` Docker container on the robot.
 
+The goal is repeatable robot preparation: whether a ROSMASTER is freshly built or already in service, the repo should give a clear path to clone, build, validate, and start it from the docs.
+
 ## Repository Status
 
 - Target robot: Yahboom ROSMASTER X3 mecanum base
@@ -75,6 +77,8 @@ tools/fetch_large_artifacts.sh
 
 Checksums and manual download instructions are in `docs/large_artifacts.md`.
 
+The `yahboomcar_slam` package now skips the optional `pcl` install path when the directory is absent, so a clean clone can build the core workspace without restoring the large bundle first.
+
 ## Package Inventory
 
 Buildable packages currently discovered by `colcon`:
@@ -136,12 +140,17 @@ python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
 
 Then follow `docs/odometry_validation.md`.
 
+## Troubleshooting
+
+- `docs/troubleshooting/README.md`: incident-driven troubleshooting index and robot failure notes.
+
 ## Documentation
 
 - `docs/setup_guide_ros2_humble_autostart.md`: ROS 2 Humble, Docker, clone/build, hardware tests, and autostart setup.
 - `docs/workstation_and_robot_workflow.md`: how to work outside the robot versus inside the robot/container.
 - `docs/odometry_validation.md`: plan for validating encoder counters, `/vel_raw`, `/odom_raw`, and EKF output.
 - `docs/large_artifacts.md`: optional artifact bundle and checksums.
+- `docs/troubleshooting/README.md`: incident-driven troubleshooting index.
 - `context.md`: concise context for coding agents or engineers working inside the robot.
 - `agents/physical_rosmaster_todo.md`: working task list.
 - `agents/rosmaster_physical_audit.md`: initial repository audit.

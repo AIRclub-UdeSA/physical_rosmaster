@@ -24,6 +24,7 @@ The active engineering goal is to bring the physical robot closer to the simulat
 - Expected ROS distro: Humble
 - Large optional artifacts are restored with `tools/fetch_large_artifacts.sh`
 - `Rosmaster_Lib` is not vendored here; it is expected to be installed on the robot/container.
+- On `x3-c`, the installed `Rosmaster_Lib` has been verified to match public V3.3.9 exactly.
 
 ## Read These Docs First
 
@@ -32,6 +33,7 @@ The active engineering goal is to bring the physical robot closer to the simulat
 - `docs/workstation_and_robot_workflow.md`: how to work outside vs inside the robot.
 - `docs/odometry_validation.md`: hardware validation plan for encoder odometry.
 - `docs/large_artifacts.md`: optional SLAM/PCD artifact restore.
+- `docs/troubleshooting/README.md`: incident-driven troubleshooting index.
 - `agents/rosmaster_lib_public_v3_3_9.md`: public Yahboom library findings.
 - `agents/physical_rosmaster_todo.md`: current task list.
 
@@ -91,11 +93,12 @@ Public Yahboom `Rosmaster_Lib` V3.3.9 findings:
 
 - `get_motion_data()` returns cached controller speed feedback from serial packet `FUNC_REPORT_SPEED = 0x0A`; it is not direct Python echo of ROS `/cmd_vel`.
 - `get_motor_encoder()` returns four cached signed 32-bit motor encoder counters from serial packet `FUNC_REPORT_ENCODER = 0x0D`.
-- We still need to verify the exact library installed on the robot and whether the counters are stable enough for odometry.
+- On `x3-c`, a stationary probe showed `motion_vx`, `motion_vy`, and `motion_vz` staying at `0.000000`, encoder counters staying at `-3, 2, 1, 90`, battery around `10.5` to `10.6` V, and no serial errors.
+- The remaining question is whether those counters are sufficient and correctly signed for motion odometry during actual wheel movement.
 
 ## Immediate Robot-Side Work
 
-1. Confirm installed `Rosmaster_Lib`:
+1. Confirm installed `Rosmaster_Lib` if you need to re-check the robot container:
 
 ```bash
 cd /root/yahboomcar_ws/src/physical_rosmaster

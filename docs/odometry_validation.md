@@ -35,7 +35,7 @@ With the robot stationary:
 
 ```bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/rosmaster_lib_probe.py --samples 50 --period 0.1
+python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
 ```
 
 Expected:
@@ -45,6 +45,28 @@ Expected:
 - battery should report a plausible voltage if the library exposes it
 
 Lift the robot and rotate each wheel by hand if safe. Encoder counters should change for the corresponding wheel channels.
+
+### x3-c Stationary Probe Result
+
+Observed on `x3-c` with the robot stationary:
+
+- `motion_vx`, `motion_vy`, and `motion_vz` stayed at `0.000000` for all 100 samples
+- encoder counters stayed constant at `-3, 2, 1, 90`
+- reported battery voltage stayed around `10.5` to `10.6` V
+- no serial errors were reported during the probe
+
+This confirms the controller is returning a stable stationary baseline, but it does not yet prove whether the encoder counters are sufficient for motion odometry.
+
+### x3-c Lifted Motion Probe Result
+
+Observed while the robot was lifted and commanded through `/cmd_vel`:
+
+- forward command produced increasing encoder counts and nonzero `motion_vx`, `motion_vy`, and `motion_vz`
+- strafe-left command produced clear encoder deltas on the four wheels and increasing `motion_vy`
+- rotate-ccw command produced strong, asymmetric encoder deltas across the four wheels and increasing `motion_vz`
+- battery stayed around `10.5` V during the short motion pulses
+
+This is enough to confirm that the reported encoder counters move with commanded motion while lifted. The next step is to capture the exact sign convention and compare the ROS `/vel_raw` and `/odom_raw` topics against these same motions.
 
 ## Stage 3: Compare Command, Firmware Velocity, And Encoders
 

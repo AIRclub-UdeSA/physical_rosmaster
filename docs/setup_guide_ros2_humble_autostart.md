@@ -195,6 +195,8 @@ tools/fetch_large_artifacts.sh
 
 Normal X3 driver bringup does not require those large artifacts.
 
+The `yahboomcar_slam` package now guards the optional `pcl` install path, so a clean clone should not fail just because the large bundle was not restored.
+
 ## Manual Hardware Tests
 
 Use wheels lifted for first motion tests.

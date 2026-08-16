@@ -58,7 +58,12 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME})
 
 include_directories(include/yahboomcar_slam)
-install(DIRECTORY launch params pcl rviz DESTINATION share/${PROJECT_NAME})
+set(slam_share_dirs launch params rviz)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/pcl")
+  list(APPEND slam_share_dirs pcl)
+endif()
+
+install(DIRECTORY ${slam_share_dirs} DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
