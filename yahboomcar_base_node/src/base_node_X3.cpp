@@ -20,7 +20,7 @@ public:
   {
     this->declare_parameter<double>("wheelbase", 0.25);
     this->declare_parameter<double>("wheel_radius", 0.033);
-    this->declare_parameter<double>("wheelbase_x", 0.200);
+    this->declare_parameter<double>("wheelbase_x", 0.160);
     this->declare_parameter<double>("wheelbase_y", 0.170);
     this->declare_parameter<std::string>("odom_frame", "odom");
     this->declare_parameter<std::string>("base_footprint_frame", "base_footprint");
@@ -33,7 +33,7 @@ public:
     this->get_parameter<double>("linear_scale_y", linear_scale_y_);
     this->get_parameter<double>("wheelbase", wheelbase_);
     this->get_parameter<double>("wheel_radius", mecanum_params_.wheel_radius);
-    double wx = 0.200, wy = 0.170;
+    double wx = 0.160, wy = 0.170;
     this->get_parameter<double>("wheelbase_x", wx);
     this->get_parameter<double>("wheelbase_y", wy);
     mecanum_params_.lx = wx / 2.0;
@@ -44,7 +44,8 @@ public:
     this->get_parameter<std::string>("odom_frame", odom_frame_);
     this->get_parameter<std::string>("base_footprint_frame", base_footprint_frame_);
 
-    last_time_ = this->get_clock()->now();
+    last_joint_time_ = this->get_clock()->now();
+    last_vel_time_ = this->get_clock()->now();
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
     subscription_joint_states_ = this->create_subscription<sensor_msgs::msg::JointState>(
@@ -120,13 +121,16 @@ private:
       prev_pos_fr_ = pos_fr;
       prev_pos_bl_ = pos_bl;
       prev_pos_br_ = pos_br;
-      last_time_ = current_time;
+      last_joint_time_ = current_time;
       has_prev_joints_ = true;
       return;
     }
 
-    const double dt = std::max(0.0, (current_time - last_time_).seconds());
-    last_time_ = current_time;
+    const double dt = (current_time - last_joint_time_).seconds();
+    if (dt <= 0.0) {
+      return;
+    }
+    last_joint_time_ = current_time;
     received_joint_states_ = true;
 
     const yahboomcar_base_node::WheelDisplacements deltas{
@@ -165,8 +169,8 @@ private:
     }
 
     const rclcpp::Time current_time = this->get_clock()->now();
-    const double vel_dt = std::max(0.0, (current_time - last_time_).seconds());
-    last_time_ = current_time;
+    const double vel_dt = std::max(0.0, (current_time - last_vel_time_).seconds());
+    last_vel_time_ = current_time;
 
     const yahboomcar_base_node::BodyVelocity velocity{
       msg->linear.x * linear_scale_x_,
@@ -191,7 +195,7 @@ private:
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
-  yahboomcar_base_node::MecanumParams mecanum_params_{0.033, 0.100, 0.085};
+  yahboomcar_base_node::MecanumParams mecanum_params_{0.033, 0.080, 0.085};
   double linear_scale_x_ = 1.0;
   double linear_scale_y_ = 1.0;
   double x_pos_ = 0.0;
@@ -208,7 +212,8 @@ private:
   double prev_pos_br_ = 0.0;
   std::string odom_frame_ = "odom";
   std::string base_footprint_frame_ = "base_footprint";
-  rclcpp::Time last_time_;
+  rclcpp::Time last_joint_time_;
+  rclcpp::Time last_vel_time_;
 };
 
 int main(int argc, char * argv[])
