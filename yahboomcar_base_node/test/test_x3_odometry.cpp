@@ -51,4 +51,45 @@ TEST(X3Odometry, RotatesBodyVelocityIntoOdomFrame)
   EXPECT_DOUBLE_EQ(result.heading, half_pi);
 }
 
+TEST(X3Odometry, MecanumKinematicsForward)
+{
+  yahboomcar_base_node::MecanumParams params{0.033, 0.10, 0.085};
+  // 4 wheels move forward 10 rad in 1 sec => w = 10 rad/s
+  // vx = r * w = 0.033 * 10 = 0.33 m/s
+  yahboomcar_base_node::WheelDisplacements deltas{10.0, 10.0, 10.0, 10.0};
+
+  const auto vel = yahboomcar_base_node::compute_mecanum_body_velocity(deltas, params, 1.0);
+
+  EXPECT_NEAR(vel.linear_x, 0.33, 1e-6);
+  EXPECT_NEAR(vel.linear_y, 0.0, 1e-6);
+  EXPECT_NEAR(vel.angular_z, 0.0, 1e-6);
+}
+
+TEST(X3Odometry, MecanumKinematicsStrafeLeft)
+{
+  yahboomcar_base_node::MecanumParams params{0.033, 0.10, 0.085};
+  // FL: -10, FR: +10, BL: +10, BR: -10 => vy = r * w = 0.33 m/s
+  yahboomcar_base_node::WheelDisplacements deltas{-10.0, 10.0, 10.0, -10.0};
+
+  const auto vel = yahboomcar_base_node::compute_mecanum_body_velocity(deltas, params, 1.0);
+
+  EXPECT_NEAR(vel.linear_x, 0.0, 1e-6);
+  EXPECT_NEAR(vel.linear_y, 0.33, 1e-6);
+  EXPECT_NEAR(vel.angular_z, 0.0, 1e-6);
+}
+
+TEST(X3Odometry, MecanumKinematicsRotateCCW)
+{
+  yahboomcar_base_node::MecanumParams params{0.033, 0.10, 0.085}; // lx+ly = 0.185
+  // FL: -10, FR: +10, BL: -10, BR: +10
+  // wz = (r / (4 * (lx+ly))) * (10 + 10 + 10 + 10) = 0.033 * 40 / (4 * 0.185) = 1.32 / 0.74 = 1.78378 rad/s
+  yahboomcar_base_node::WheelDisplacements deltas{-10.0, 10.0, -10.0, 10.0};
+
+  const auto vel = yahboomcar_base_node::compute_mecanum_body_velocity(deltas, params, 1.0);
+
+  EXPECT_NEAR(vel.linear_x, 0.0, 1e-6);
+  EXPECT_NEAR(vel.linear_y, 0.0, 1e-6);
+  EXPECT_NEAR(vel.angular_z, 0.033 * 40.0 / (4.0 * 0.185), 1e-6);
+}
+
 }  // namespace
