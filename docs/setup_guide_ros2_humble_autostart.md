@@ -37,6 +37,21 @@ Update `/etc/hosts` so the `127.0.1.1` line uses the new hostname:
 
 Configure the robot WiFi from the desktop network manager or your site-specific network tooling. Do not commit WiFi passwords or private network credentials to this repo.
 
+### Set The Default WiFi Network
+
+Before doing anything over SSH, set the network the robot should join automatically on boot. This is done from the robot's own desktop, using the NetworkManager applet.
+
+1. Click the Network icon and open **Edit Connections**.
+2. Find the robot's default/factory WiFi network (e.g. an access point the robot itself broadcasts or ships pre-configured with) and select it.
+3. Go to the **General** tab and uncheck **"Connect automatically with priority"**. Save the changes.
+4. Click the Network icon again and connect to the target WiFi network (`<TARGET_WIFI_SSID>`).
+5. If the network does not appear in the list, go to **Advanced Options → Connect to Hidden Wi-Fi Network** and create a hidden connection for `<TARGET_WIFI_SSID>`. Once created, it should also show up under the regular Network icon.
+6. Enter the WiFi password when prompted. Do not store this password in this repo.
+7. Go to **Edit Connections → `<TARGET_WIFI_SSID>` → General** and check **"Connect automatically with priority"**.
+8. Reboot the robot. It should now connect automatically to `<TARGET_WIFI_SSID>` on startup.
+
+Only once this is confirmed should you proceed to SSH-based setup below.
+
 SSH into the robot host:
 
 ```bash
@@ -57,6 +72,14 @@ df -h
 ```
 
 Remove old stopped containers or unused images only after confirming they are not needed. The old Foxy images can consume significant disk space.
+
+For a deep clean (stopped containers, dangling and unused images, unused networks, and build cache), use:
+
+```bash
+docker system prune -a
+```
+
+This removes anything not associated with a running container, so double-check `docker ps -a` first and confirm before running it on a shared robot.
 
 Pull the Humble image:
 
