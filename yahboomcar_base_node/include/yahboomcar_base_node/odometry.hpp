@@ -27,6 +27,40 @@ struct BodyVelocity
   double angular_z;
 };
 
+struct WheelDisplacements
+{
+  double delta_fl;
+  double delta_fr;
+  double delta_bl;
+  double delta_br;
+};
+
+struct MecanumParams
+{
+  double wheel_radius;  // m (e.g. 0.033)
+  double lx;            // m (half wheelbase x separation)
+  double ly;            // m (half track width y separation)
+};
+
+inline BodyVelocity compute_mecanum_body_velocity(
+  const WheelDisplacements & wheel_deltas,
+  const MecanumParams & params,
+  const double dt)
+{
+  if (dt <= 0.0) {
+    return BodyVelocity{0.0, 0.0, 0.0};
+  }
+
+  const double r = params.wheel_radius;
+  const double k = (params.lx + params.ly > 0.0) ? (params.lx + params.ly) : 1.0;
+
+  const double vx = (r / 4.0) * (wheel_deltas.delta_fl + wheel_deltas.delta_fr + wheel_deltas.delta_bl + wheel_deltas.delta_br) / dt;
+  const double vy = (r / 4.0) * (-wheel_deltas.delta_fl + wheel_deltas.delta_fr + wheel_deltas.delta_bl - wheel_deltas.delta_br) / dt;
+  const double wz = (r / (4.0 * k)) * (-wheel_deltas.delta_fl + wheel_deltas.delta_fr - wheel_deltas.delta_bl + wheel_deltas.delta_br) / dt;
+
+  return BodyVelocity{vx, vy, wz};
+}
+
 inline OdomState integrate_velocity(
   const OdomState & state,
   const BodyVelocity & velocity,

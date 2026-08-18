@@ -47,16 +47,15 @@ class yahboomcar_driver(Node):
 		self.declare_parameter('ylinear_limit', 1.0)
 		self.ylinear_limit = self.get_parameter('ylinear_limit').get_parameter_value().double_value
 		print (self.ylinear_limit)
-		self.declare_parameter('angular_limit', 5.0)
-		self.angular_limit = self.get_parameter('angular_limit').get_parameter_value().double_value
-		print (self.angular_limit)
+		self.declare_parameter('encoder_cpr', 1040.0)
+		self.encoder_cpr = self.get_parameter('encoder_cpr').get_parameter_value().double_value
 
-		#create subcriber
+		# create subcriber
 		self.sub_cmd_vel = self.create_subscription(Twist,"cmd_vel",self.cmd_vel_callback,1)
 		self.sub_RGBLight = self.create_subscription(Int32,"RGBLight",self.RGBLightcallback,100)
 		self.sub_BUzzer = self.create_subscription(Bool,"Buzzer",self.Buzzercallback,100)
 
-		#create publisher
+		# create publisher
 		self.EdiPublisher = self.create_publisher(Float32,"edition",100)
 		self.volPublisher = self.create_publisher(Float32,"voltage",100)
 		self.staPublisher = self.create_publisher(JointState,"joint_states",100)
@@ -64,12 +63,15 @@ class yahboomcar_driver(Node):
 		self.imuPublisher = self.create_publisher(Imu,"/imu/data_raw",100)
 		self.magPublisher = self.create_publisher(MagneticField,"/imu/mag",100)
 
-		#create timer
+		# create timer
 		self.timer = self.create_timer(0.1, self.pub_data)
 
-		#create and init variable
+		# create and init variable
 		self.edition = Float32()
 		self.edition.data = 1.0
+		self.prev_encoders = None
+		self.prev_time = None
+		self.joint_positions = [0.0, 0.0, 0.0, 0.0]  # [fl, fr, bl, br]
 		self.car.create_receive_threading()
 	#callback function
 	def cmd_vel_callback(self,msg):
@@ -102,21 +104,56 @@ class yahboomcar_driver(Node):
 
 	#pub data
 	def pub_data(self):
-		time_stamp = Clock().now()
+		now = Clock().now()
+		time_stamp = now.to_msg()
 		imu = Imu()
 		twist = Twist()
 		battery = Float32()
 		edition = Float32()
 		mag = MagneticField()
 		state = JointState()
-		state.header.stamp = time_stamp.to_msg()
+		state.header.stamp = time_stamp
 		state.header.frame_id = "joint_states"
-		if len(self.Prefix)==0:
-			state.name = ["back_right_joint", "back_left_joint","front_left_steer_joint","front_left_wheel_joint",
-							"front_right_steer_joint", "front_right_wheel_joint"]
+		
+		# Official X3 Mecanum joint names
+		joint_base_names = ["front_left_joint", "front_right_joint", "back_left_joint", "back_right_joint"]
+		if len(self.Prefix) == 0:
+			state.name = joint_base_names
 		else:
-			state.name = [self.Prefix+"back_right_joint",self.Prefix+ "back_left_joint",self.Prefix+"front_left_steer_joint",self.Prefix+"front_left_wheel_joint",
-							self.Prefix+"front_right_steer_joint", self.Prefix+"front_right_wheel_joint"]
+			state.name = [self.Prefix + j for j in joint_base_names]
+		
+		# Poll encoders from Rosmaster_Lib (m1: FR, m2: FL, m3: RR, m4: RL)
+		try:
+			m1, m2, m3, m4 = self.car.get_motor_encoder()
+			# Map to [FL, FR, BL, BR]
+			curr_encoders = [m2, m1, m4, m3]
+			
+			if self.prev_encoders is not None and self.prev_time is not None:
+				dt = (now - self.prev_time).nanoseconds / 1e9
+				if dt > 0:
+					velocities = []
+					rad_per_tick = (2.0 * math.pi) / max(1.0, self.encoder_cpr)
+					for i in range(4):
+						delta_ticks = curr_encoders[i] - self.prev_encoders[i]
+						delta_rad = delta_ticks * rad_per_tick
+						self.joint_positions[i] += delta_rad
+						velocities.append(delta_rad / dt)
+					state.position = list(self.joint_positions)
+					state.velocity = velocities
+				else:
+					state.position = list(self.joint_positions)
+					state.velocity = [0.0, 0.0, 0.0, 0.0]
+			else:
+				state.position = list(self.joint_positions)
+				state.velocity = [0.0, 0.0, 0.0, 0.0]
+			
+			self.prev_encoders = curr_encoders
+			self.prev_time = now
+		except Exception:
+			state.position = list(self.joint_positions)
+			state.velocity = [0.0, 0.0, 0.0, 0.0]
+			
+		self.staPublisher.publish(state)
 		
 		#print ("mag: ",self.car.get_magnetometer_data())		
 		edition.data = self.car.get_version()*1.0
@@ -133,7 +170,7 @@ class yahboomcar_driver(Node):
 		print("angular: ",angular)'''
 		# 发布陀螺仪的数据
 		# Publish gyroscope data
-		imu.header.stamp = time_stamp.to_msg()
+		imu.header.stamp = time_stamp
 		imu.header.frame_id = self.imu_link
 		imu.linear_acceleration.x = ax*1.0
 		imu.linear_acceleration.y = ay*1.0
@@ -142,7 +179,7 @@ class yahboomcar_driver(Node):
 		imu.angular_velocity.y = gy*1.0
 		imu.angular_velocity.z = gz*1.0
 
-		mag.header.stamp = time_stamp.to_msg()
+		mag.header.stamp = time_stamp
 		mag.header.frame_id = self.imu_link
 		mag.magnetic_field.x = mx*1.0
 		mag.magnetic_field.y = my*1.0
@@ -154,11 +191,6 @@ class yahboomcar_driver(Node):
 		twist.linear.y = vy *1.0
 		twist.angular.z = angular*1.0    
 		self.velPublisher.publish(twist)
-		# print("ax: %.5f, ay: %.5f, az: %.5f" % (ax, ay, az))
-		# print("gx: %.5f, gy: %.5f, gz: %.5f" % (gx, gy, gz))
-		# print("mx: %.5f, my: %.5f, mz: %.5f" % (mx, my, mz))
-		# rospy.loginfo("battery: {}".format(battery))
-		# rospy.loginfo("vx: {}, vy: {}, angular: {}".format(twist.linear.x, twist.linear.y, twist.angular.z))
 		self.imuPublisher.publish(imu)
 		self.magPublisher.publish(mag)
 		self.volPublisher.publish(battery)
