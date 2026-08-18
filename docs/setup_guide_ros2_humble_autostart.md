@@ -396,6 +396,25 @@ fi
 
 echo "[$(date)] ROS nodes started" >> /tmp/ros_autostart.log
 
+python3 -c "
+import rclpy
+from std_msgs.msg import Bool
+import time
+rclpy.init()
+node = rclpy.create_node('beeper_boot')
+pub = node.create_publisher(Bool, '/Buzzer', 10)
+time.sleep(0.5)
+def beep(d, p=0.08):
+    pub.publish(Bool(data=True))
+    time.sleep(d)
+    pub.publish(Bool(data=False))
+    time.sleep(p)
+beep(0.1); beep(0.1); beep(0.4)
+node.destroy_node()
+rclpy.shutdown()
+" || echo "[$(date)] WARNING: buzzer beep failed" >> /tmp/ros_autostart.log
+
+sleep 5
 ros2 topic pub -1 /RGBLight std_msgs/msg/Int32 "data: 0" >/dev/null 2>&1 || true
 
 tail -f /dev/null
