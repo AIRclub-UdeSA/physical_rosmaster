@@ -125,6 +125,12 @@ source ~/gmapping_ws/install/setup.bash 2>/dev/null || true
 source ~/yahboomcar_ws/install/setup.bash 2>/dev/null || true
 ```
 
+Exit the container back to the robot host:
+
+```bash
+exit
+```
+
 From the robot host, configure Docker restart:
 
 ```bash
@@ -167,32 +173,47 @@ pip3 install pyserial
 python3 -c "from Rosmaster_Lib import Rosmaster; print('OK Rosmaster_Lib')"
 ```
 
-After this repo is cloned, inspect the exact installed copy:
-
-```bash
-cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/rosmaster_lib_probe.py --hash-only
-```
-
 ## Clone This Repository Into The Container
 
-Inside the container:
+Inside the container, refresh the ROS apt signing key (the ROS Foundation key rotates periodically; an expired key makes apt fall back to a stale package index and produces `404 Not Found` errors on `ros-humble-*` packages during install):
 
 ```bash
 apt-get update
-apt-get install -y git curl unzip python3-pip python3-serial \
+apt-get install -y gnupg2
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F42ED6FBAB17C654
+```
+
+Then update and install:
+
+```bash
+apt-get update
+apt-get install -y git curl unzip nano python3-pip python3-serial \
   ros-humble-robot-localization \
   ros-humble-joint-state-publisher-gui \
   ros-humble-xacro \
   ros-humble-usb-cam
 ```
 
+Verify the install succeeded:
+
+```bash
+dpkg -l | grep -E "ros-humble-(robot-localization|joint-state-publisher-gui|xacro|usb-cam)"
+
+source /opt/ros/humble/setup.bash
+ros2 pkg list | grep -E "robot_localization|joint_state_publisher_gui|xacro|usb_cam"
+
+ros2 run xacro xacro --help
+ros2 pkg executables usb_cam
+```
+
+All commands should return results with no "not found" or missing-dependency errors.
+
 Back up any existing source tree before replacing it:
 
 ```bash
 cd /root/yahboomcar_ws
 tar czf /root/yahboomcar_ws_src_backup_$(date +%F_%H%M%S).tgz src
-mv src src.before_physical_rosmaster_$(date +%F_%H%M%S)
+mv src /root/src_backup_before_physical_rosmaster_$(date +%F_%H%M%S)
 mkdir -p src
 ```
 
@@ -203,10 +224,18 @@ cd /root/yahboomcar_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
 
 cd /root/yahboomcar_ws
+rm -rf build install log
 source /opt/ros/humble/setup.bash
 colcon list --base-paths src/physical_rosmaster
 colcon build --symlink-install
 source install/setup.bash
+```
+
+Now that the repo is cloned, inspect the exact installed copy of `Rosmaster_Lib`:
+
+```bash
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/rosmaster_lib_probe.py --hash-only
 ```
 
 Optional SLAM/PCD artifacts:
@@ -232,7 +261,13 @@ source /root/yahboomcar_ws/install/setup.bash
 ros2 run yahboomcar_bringup Mcnamu_driver_X3
 ```
 
-In another container shell:
+In another shell, enter the container:
+
+```bash
+docker exec -it rosmaster_humble bash
+```
+
+Once inside that second shell, source the workspace and publish a test velocity command:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -374,7 +409,12 @@ chmod +x /root/auto_start.sh
 
 ## Host Autostart Script
 
-On the robot host, create `/usr/local/bin/start_rosmaster.sh`:
+On the robot host:
+```bash
+exit
+```
+
+create `/usr/local/bin/start_rosmaster.sh`:
 
 ```bash
 sudo nano /usr/local/bin/start_rosmaster.sh
@@ -412,6 +452,12 @@ sudo chmod +x /usr/local/bin/start_rosmaster.sh
 ## systemd Service
 
 On the robot host, create `/etc/systemd/system/rosmaster-autostart.service`:
+
+```bash
+sudo nano /etc/systemd/system/rosmaster-autostart.service
+```
+
+Content:
 
 ```ini
 [Unit]
