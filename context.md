@@ -80,55 +80,29 @@ source install/setup.bash
 ```
 
 ## Odometry Facts So Far
-
-Physical driver path:
-
-- `yahboomcar_bringup/yahboomcar_bringup/Mcnamu_driver_X3.py` subscribes to `/cmd_vel`.
-- It calls `Rosmaster_Lib.Rosmaster.set_car_motion(...)`.
-- It publishes `/vel_raw` from `Rosmaster_Lib.Rosmaster.get_motion_data()`.
-- `yahboomcar_base_node/src/base_node_X3.cpp` integrates `/vel_raw` into `/odom_raw`.
-- `robot_localization` fuses `/odom_raw` with IMU and publishes `/odom`.
-
-Public Yahboom `Rosmaster_Lib` V3.3.9 findings:
-
-- `get_motion_data()` returns cached controller speed feedback from serial packet `FUNC_REPORT_SPEED = 0x0A`; it is not direct Python echo of ROS `/cmd_vel`.
-- `get_motor_encoder()` returns four cached signed 32-bit motor encoder counters from serial packet `FUNC_REPORT_ENCODER = 0x0D`.
-- On `x3-c`, a stationary probe showed `motion_vx`, `motion_vy`, and `motion_vz` staying at `0.000000`, encoder counters staying at `-3, 2, 1, 90`, battery around `10.5` to `10.6` V, and no serial errors.
-- The remaining question is whether those counters are sufficient and correctly signed for motion odometry during actual wheel movement.
-
-## Immediate Robot-Side Work
-
-1. Confirm installed `Rosmaster_Lib` if you need to re-check the robot container:
-
-```bash
-cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/rosmaster_lib_probe.py --hash-only
-```
-
-2. Sample stationary motion/encoder data:
-
-```bash
-python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
-```
-
-3. Follow `docs/odometry_validation.md` to record `/cmd_vel`, `/vel_raw`, `/odom_raw`, `/odom`, IMU, and `/tf`.
-
-4. Report exact outputs and robot conditions:
-
-- robot lifted or on floor
-- command used
-- wheel that moved or was resisted
-- encoder values before/after
-- `/vel_raw` values
-- `/odom_raw` behavior
-
-## Likely Code Path If Encoders Work
-
-- Update `Mcnamu_driver_X3.py` to call `get_motor_encoder()`.
-- Publish real X3 wheel names and positions/velocities in `/joint_states`.
-- Add a new encoder-delta mecanum odometry implementation or refactor `base_node_X3.cpp` to consume wheel state.
-- Use simulator math as the reference contract.
-- Keep existing velocity odometry as fallback until the encoder path is validated on the robot.
+ 
+ Physical driver path:
+ 
+ - `yahboomcar_bringup/yahboomcar_bringup/Mcnamu_driver_X3.py` subscribes to `/cmd_vel`.
+ - It calls `Rosmaster_Lib.Rosmaster.set_car_motion(...)`.
+ - It polls `get_motor_encoder()` and publishes four wheel positions and angular velocities on `/joint_states`.
+ - It publishes `/vel_raw` from `Rosmaster_Lib.Rosmaster.get_motion_data()`.
+ - `yahboomcar_base_node/src/base_node_X3.cpp` computes 4-wheel mecanum kinematics from `/joint_states` and integrates velocities into `/odom_raw` (falls back to `/vel_raw` if joint states are absent).
+ - `robot_localization` fuses `/odom_raw` with IMU and publishes `/odom`.
+ 
+ Hardware validation findings:
+ 
+ - `get_motor_encoder()` returns four 32-bit signed counters.
+ - Lifted motion tests verified that encoder counters increment and `/odom_raw` integrates properly during motion.
+ - Floor testing revealed a motor deadband at low speeds (0.10 m/s) and a sign inversion during lateral strafe tests that requires per-wheel index/sign calibration.
+ - Standard recovery checklist is in `agents/x3-c_validation_checklist.md`.
+ 
+ ## Immediate Robot-Side Work
+ 
+ 1. Follow `agents/x3-c_validation_checklist.md` for hardware recovery and validation.
+ 2. Verify per-wheel encoder direction by rotating wheels by hand using `python3 tools/rosmaster_lib_probe.py --samples 500 --period 0.1`.
+ 3. Ensure battery is charged (> 12.0 V) and test floor motion at 0.20 m/s.
+ 4. Calibrate ground-truth 1.0 m translation and 360° rotation.
 
 ## Verification Commands
 

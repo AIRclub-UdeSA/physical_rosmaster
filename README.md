@@ -111,26 +111,22 @@ Packages present but ignored by `COLCON_IGNORE`:
 
 ## Odometry Status
 
-The physical X3 odometry path still needs robot-side validation.
+The physical X3 odometry path calculates mecanum body velocities from wheel encoder feedback published on `/joint_states`, falling back to firmware velocity integration if joint states are unavailable.
 
 Current flow:
 
-- `yahboomcar_bringup/Mcnamu_driver_X3.py` subscribes to `/cmd_vel`.
-- It sends commands through `Rosmaster_Lib.Rosmaster.set_car_motion(...)`.
-- It publishes `/vel_raw` from `Rosmaster_Lib.Rosmaster.get_motion_data()`.
-- `yahboomcar_base_node/src/base_node_X3.cpp` integrates `/vel_raw` into `/odom_raw`.
-- `robot_localization` fuses `/odom_raw` and `/imu/data`, remapping `/odometry/filtered` to `/odom`.
+- `yahboomcar_bringup/Mcnamu_driver_X3.py` subscribes to `/cmd_vel` and sends commands via `Rosmaster_Lib.Rosmaster.set_car_motion(...)`.
+- `Mcnamu_driver_X3.py` polls `Rosmaster_Lib.Rosmaster.get_motor_encoder()` and publishes four-wheel positions and angular velocities on `/joint_states`.
+- It also publishes `/vel_raw` from `Rosmaster_Lib.Rosmaster.get_motion_data()` for firmware speed telemetry.
+- `yahboomcar_base_node/src/base_node_X3.cpp` consumes `/joint_states`, evaluates 4-wheel mecanum kinematics, and integrates body velocities into `/odom_raw`.
+- `robot_localization` (EKF) fuses `/odom_raw` and `/imu/data`, publishing `/odom` and broadcasting `odom -> base_footprint`.
 
-Public Yahboom `Rosmaster_Lib` V3.3.9 shows `get_motion_data()` returns cached controller speed feedback, not direct Python echo of `/cmd_vel`. The same library exposes `get_motor_encoder()`, which returns four motor encoder counters. If those counters are stable on the physical robot, the next odometry implementation should compute mecanum odometry from encoder deltas and publish meaningful wheel state through `/joint_states`.
+Validation status & checklist:
 
-Already fixed locally:
+- Lifted tests verified encoder feedback and raw odometry calculation.
+- Sign calibration and floor deadband validation are documented in `agents/x3-c_validation_checklist.md`.
 
-- `base_node_X3.cpp` preserves lateral mecanum velocity in the published odometry twist.
-- `base_node_X3.cpp` initializes its previous timestamp correctly.
-- `base_node_X3.cpp` uses the node clock consistently.
-- `base_node_X3.cpp` uses declared odom/base frame parameters instead of hardcoded frame strings.
-
-Robot-side validation plan:
+Validation probe tools:
 
 ```bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
@@ -138,7 +134,7 @@ python3 tools/rosmaster_lib_probe.py --hash-only
 python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
 ```
 
-Then follow `docs/odometry_validation.md`.
+See `agents/x3-c_validation_checklist.md` and `docs/odometry_validation.md` for the full test procedure.
 
 ## Troubleshooting
 
