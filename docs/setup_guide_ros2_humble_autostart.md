@@ -37,6 +37,21 @@ Update `/etc/hosts` so the `127.0.1.1` line uses the new hostname:
 
 Configure the robot WiFi from the desktop network manager or your site-specific network tooling. Do not commit WiFi passwords or private network credentials to this repo.
 
+### Set The Default WiFi Network
+
+Before doing anything over SSH, set the network the robot should join automatically on boot. This is done from the robot's own desktop, using the NetworkManager applet.
+
+1. Click the Network icon and open **Edit Connections**.
+2. Find the robot's default/factory WiFi network (e.g. an access point the robot itself broadcasts or ships pre-configured with) and select it.
+3. Go to the **General** tab and uncheck **"Connect automatically with priority"**. Save the changes.
+4. Click the Network icon again and connect to the target WiFi network (`<TARGET_WIFI_SSID>`).
+5. If the network does not appear in the list, go to **Advanced Options → Connect to Hidden Wi-Fi Network** and create a hidden connection for `<TARGET_WIFI_SSID>`. Once created, it should also show up under the regular Network icon.
+6. Enter the WiFi password when prompted. Do not store this password in this repo.
+7. Go to **Edit Connections → `<TARGET_WIFI_SSID>` → General** and check **"Connect automatically with priority"**.
+8. Reboot the robot. It should now connect automatically to `<TARGET_WIFI_SSID>` on startup.
+
+Only once this is confirmed should you proceed to SSH-based setup below.
+
 SSH into the robot host:
 
 ```bash
@@ -57,6 +72,14 @@ df -h
 ```
 
 Remove old stopped containers or unused images only after confirming they are not needed. The old Foxy images can consume significant disk space.
+
+For a deep clean (stopped containers, dangling and unused images, unused networks, and build cache), use:
+
+```bash
+docker system prune -a
+```
+
+This removes anything not associated with a running container, so double-check `docker ps -a` first and confirm before running it on a shared robot.
 
 Pull the Humble image:
 
@@ -102,6 +125,12 @@ source ~/gmapping_ws/install/setup.bash 2>/dev/null || true
 source ~/yahboomcar_ws/install/setup.bash 2>/dev/null || true
 ```
 
+Exit the container back to the robot host:
+
+```bash
+exit
+```
+
 From the robot host, configure Docker restart:
 
 ```bash
@@ -144,32 +173,47 @@ pip3 install pyserial
 python3 -c "from Rosmaster_Lib import Rosmaster; print('OK Rosmaster_Lib')"
 ```
 
-After this repo is cloned, inspect the exact installed copy:
-
-```bash
-cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/rosmaster_lib_probe.py --hash-only
-```
-
 ## Clone This Repository Into The Container
 
-Inside the container:
+Inside the container, refresh the ROS apt signing key (the ROS Foundation key rotates periodically; an expired key makes apt fall back to a stale package index and produces `404 Not Found` errors on `ros-humble-*` packages during install):
 
 ```bash
 apt-get update
-apt-get install -y git curl unzip python3-pip python3-serial \
+apt-get install -y gnupg2
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F42ED6FBAB17C654
+```
+
+Then update and install:
+
+```bash
+apt-get update
+apt-get install -y git curl unzip nano python3-pip python3-serial \
   ros-humble-robot-localization \
   ros-humble-joint-state-publisher-gui \
   ros-humble-xacro \
   ros-humble-usb-cam
 ```
 
+Verify the install succeeded:
+
+```bash
+dpkg -l | grep -E "ros-humble-(robot-localization|joint-state-publisher-gui|xacro|usb-cam)"
+
+source /opt/ros/humble/setup.bash
+ros2 pkg list | grep -E "robot_localization|joint_state_publisher_gui|xacro|usb_cam"
+
+ros2 run xacro xacro --help
+ros2 pkg executables usb_cam
+```
+
+All commands should return results with no "not found" or missing-dependency errors.
+
 Back up any existing source tree before replacing it:
 
 ```bash
 cd /root/yahboomcar_ws
 tar czf /root/yahboomcar_ws_src_backup_$(date +%F_%H%M%S).tgz src
-mv src src.before_physical_rosmaster_$(date +%F_%H%M%S)
+mv src /root/src_backup_before_physical_rosmaster_$(date +%F_%H%M%S)
 mkdir -p src
 ```
 
@@ -180,10 +224,18 @@ cd /root/yahboomcar_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
 
 cd /root/yahboomcar_ws
+rm -rf build install log
 source /opt/ros/humble/setup.bash
 colcon list --base-paths src/physical_rosmaster
 colcon build --symlink-install
 source install/setup.bash
+```
+
+Now that the repo is cloned, inspect the exact installed copy of `Rosmaster_Lib`:
+
+```bash
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/rosmaster_lib_probe.py --hash-only
 ```
 
 Optional SLAM/PCD artifacts:
@@ -209,7 +261,13 @@ source /root/yahboomcar_ws/install/setup.bash
 ros2 run yahboomcar_bringup Mcnamu_driver_X3
 ```
 
-In another container shell:
+In another shell, enter the container:
+
+```bash
+docker exec -it rosmaster_humble bash
+```
+
+Once inside that second shell, source the workspace and publish a test velocity command:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -338,6 +396,25 @@ fi
 
 echo "[$(date)] ROS nodes started" >> /tmp/ros_autostart.log
 
+python3 -c "
+import rclpy
+from std_msgs.msg import Bool
+import time
+rclpy.init()
+node = rclpy.create_node('beeper_boot')
+pub = node.create_publisher(Bool, '/Buzzer', 10)
+time.sleep(0.5)
+def beep(d, p=0.08):
+    pub.publish(Bool(data=True))
+    time.sleep(d)
+    pub.publish(Bool(data=False))
+    time.sleep(p)
+beep(0.1); beep(0.1); beep(0.4)
+node.destroy_node()
+rclpy.shutdown()
+" || echo "[$(date)] WARNING: buzzer beep failed" >> /tmp/ros_autostart.log
+
+sleep 5
 ros2 topic pub -1 /RGBLight std_msgs/msg/Int32 "data: 0" >/dev/null 2>&1 || true
 
 tail -f /dev/null
@@ -351,7 +428,12 @@ chmod +x /root/auto_start.sh
 
 ## Host Autostart Script
 
-On the robot host, create `/usr/local/bin/start_rosmaster.sh`:
+On the robot host:
+```bash
+exit
+```
+
+create `/usr/local/bin/start_rosmaster.sh`:
 
 ```bash
 sudo nano /usr/local/bin/start_rosmaster.sh
@@ -389,6 +471,12 @@ sudo chmod +x /usr/local/bin/start_rosmaster.sh
 ## systemd Service
 
 On the robot host, create `/etc/systemd/system/rosmaster-autostart.service`:
+
+```bash
+sudo nano /etc/systemd/system/rosmaster-autostart.service
+```
+
+Content:
 
 ```ini
 [Unit]
