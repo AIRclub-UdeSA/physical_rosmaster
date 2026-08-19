@@ -27,6 +27,8 @@ def generate_launch_description():
                                      description='Absolute path to rviz config file')
     pub_odom_tf_arg = DeclareLaunchArgument('pub_odom_tf', default_value='false',
                                             description='Whether to publish the tf from the original odom to the base_footprint')
+    use_joy_arg = DeclareLaunchArgument('use_joy', default_value='false', choices=['true', 'false'],
+                                        description='Whether to launch the joystick controller node')
 
     robot_description = ParameterValue(Command(['xacro ', LaunchConfiguration('model')]),
                                        value_type=str)
@@ -70,12 +72,14 @@ def generate_launch_description():
     yahboom_joy_node = Node(
         package='yahboomcar_ctrl',
         executable='yahboom_joy_X3',
+        condition=IfCondition(LaunchConfiguration('use_joy'))
     )
 
     return LaunchDescription([
         model_arg,
         rviz_arg,
         pub_odom_tf_arg,
+        use_joy_arg,
         robot_state_publisher_node,
         driver_node,
         base_node,
