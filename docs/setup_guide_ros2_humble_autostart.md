@@ -251,7 +251,9 @@ The `yahboomcar_slam` package now guards the optional `pcl` install path, so a c
 
 ## Manual Hardware Tests
 
-Use wheels lifted for first motion tests.
+Use wheels securely lifted for first motion tests, with supervision and physical
+access to motor power. Follow `agents/x3-c_validation_checklist.md` before any
+floor motion; a clear floor area is not a substitute for the lifted gate.
 
 Motor driver only:
 

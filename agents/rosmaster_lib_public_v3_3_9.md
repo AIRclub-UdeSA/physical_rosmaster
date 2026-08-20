@@ -73,9 +73,31 @@ Interpretation: real encoder-position odometry is probably possible if these cou
 - Uses `vel_raw` only as a timed fallback when joint states are unavailable.
 - Publishes raw wheel odometry on `/odom_raw`; the EKF owns filtered `/odom` and normal `odom -> base_footprint` TF.
 
-## Robot-Side Confirmation Needed
+## Robot-Side Confirmation Status
 
-When the robot is available, compare the installed library with the public reference:
+Completed on `x3-c` on 2026-08-20:
+
+- The installed library matched the public V3.3.9 reference hash.
+- Stationary encoder counters and firmware motion feedback were stable.
+- Isolated forward hand rotations identified packet fields for all four wheels.
+- The physical wiring matched Yahboom's port layout.
+
+The confirmed physical, PCB-port, and packet-field relationship is:
+
+| Physical wheel | PCB port | Raw encoder packet field |
+| --- | --- | --- |
+| Front-left | `M4` | `m1` |
+| Front-right | `M2` | `m3` |
+| Back-left | `M3` | `m2` |
+| Back-right | `M1` | `m4` |
+
+The following checks still require robot hardware:
+
+- Repeat powered forward, strafe, and rotation sign checks while securely lifted.
+- Measure exact encoder CPR with marked wheel rotations.
+- Compare `/cmd_vel`, `/vel_raw`, and encoder response while lifted, on the floor, stopped, and with a wheel resisted.
+
+The reusable library-hash command is:
 
 ```bash
 python3 - <<'PY'
@@ -91,20 +113,12 @@ print(len(data))
 PY
 ```
 
-Then run a hardware sanity check with wheels lifted and on the floor:
+For a direct serial sanity check, with the ROS driver stopped so it does not
+compete for the controller serial port, use:
 
 ```bash
-python3 - <<'PY'
-import time
-from Rosmaster_Lib import Rosmaster
-
-car = Rosmaster()
-car.create_receive_threading()
-
-for i in range(100):
-    print(i, "motion=", car.get_motion_data(), "encoders=", car.get_motor_encoder())
-    time.sleep(0.1)
-PY
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
 ```
 
 Expected useful signal: encoder values should change when wheels rotate, keep their latest count when stopped, and diverge if one wheel slips or is resisted. If that holds, the physical odometry fix should use encoder deltas, not `vel_raw` integration alone.

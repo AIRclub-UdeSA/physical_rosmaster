@@ -150,7 +150,9 @@ Normal X3 driver/base bringup should not need those files. ORB-SLAM or point-clo
 
 ## First Robot Validation After Clone
 
-Use wheels lifted for first motion tests.
+Use wheels securely lifted for first motion tests, with supervision and physical
+access to motor power. Follow `agents/x3-c_validation_checklist.md` before any
+floor motion.
 
 ```bash
 cd /root/yahboomcar_ws

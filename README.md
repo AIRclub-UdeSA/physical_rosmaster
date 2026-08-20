@@ -125,7 +125,7 @@ Current flow:
 Validation status & checklist:
 
 - Floor pulse tests verified that encoder feedback changes and raw odometry calculates from it, but they were run without external ground truth and do not satisfy the lifted validation gate.
-- Direction-controlled per-wheel hand testing validated raw packet-field order `[m1, m3, m2, m4] = [FL, FR, BL, BR]`, with forward-positive signs on all four wheels. The earlier wiring-fault conclusion was withdrawn because the library field names do not identify PCB motor ports.
+- Direction-controlled per-wheel hand testing validated raw packet-field order `[m1, m3, m2, m4] = [FL, FR, BL, BR]`, with forward-positive signs on all four wheels. The operator also confirmed Yahboom's physical port layout: `[FL, FR, BL, BR] = [M4, M2, M3, M1]`. Packet fields and printed PCB motor-port labels are distinct, so the earlier wiring-fault conclusion and proposed cable swaps were withdrawn.
 - With the rebuilt mapping, floor observations matched the expected forward, strafe-left, and CCW wheel-sign patterns. A true lifted repetition remains outstanding; significant per-wheel magnitude/yaw bias and provisional CPR are documented in `agents/x3-c_validation_checklist.md`.
 
 Validation probe tools:
@@ -136,10 +136,10 @@ python3 tools/rosmaster_lib_probe.py --hash-only
 python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
 ```
 
-Run the sampling probe only when `driver_node` is stopped; both processes use the motor-controller serial port. Supervised motion tests must use the bounded pulse tool after confirming the robot is lifted or in a clear test area:
+Run the sampling probe only when `driver_node` is stopped; both processes use the motor-controller serial port. The next required powered validation must be supervised, use the bounded pulse tool, and have the robot securely lifted. Floor testing has separate battery, clearance, and ground-truth gates in the validation checklist:
 
 ```bash
-python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5
+python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5 --require-recorder
 ```
 
 See `agents/x3-c_validation_checklist.md` and `docs/odometry_validation.md` for the full test procedure.

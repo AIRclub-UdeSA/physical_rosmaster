@@ -41,10 +41,14 @@ If the clone is clean and an update is required:
 
 ```bash
 git fetch origin
+git switch main
 git pull --ff-only origin main
+git log -1 --oneline
 ```
 
-Never overwrite robot-local changes to update the checkout.
+These commands assume the validation branch has been merged to `main`. If a
+specific unmerged revision is required, check out that branch explicitly.
+Never switch branches or overwrite robot-local changes to update the checkout.
 
 Build and test:
 
@@ -110,6 +114,16 @@ the first pass's ambiguous back-right direction.
 The validated software mapping is `[FL, FR, BL, BR] = [m1, m3, m2, m4]`, or
 zero-based `encoder_order: [0, 2, 1, 3]`, with
 `encoder_signs: [1.0, 1.0, 1.0, 1.0]`.
+
+The operator confirmed that the powered-off wiring follows Yahboom's physical
+port layout. Keeping PCB ports distinct from report-packet field names gives:
+
+| Physical wheel | PCB port | Raw encoder packet field | ROS joint |
+| --- | --- | --- | --- |
+| Front-left | `M4` | `m1` | `front_left_joint` |
+| Front-right | `M2` | `m3` | `front_right_joint` |
+| Back-left | `M3` | `m2` | `back_left_joint` |
+| Back-right | `M1` | `m4` | `back_right_joint` |
 
 Do not infer PCB motor-port wiring from these field names. The installed
 `Rosmaster_Lib` unpacks four consecutive encoder report fields and returns them
@@ -178,8 +192,11 @@ ros2 bag record \
   --qos-profile-overrides-path \
   /root/yahboomcar_ws/src/physical_rosmaster/tools/x3_validation_qos.yaml \
   --regex '^/(cmd_vel|joint_states|vel_raw|odom_raw|odom|rosout|imu/data_raw|imu/data|voltage|edition|tf|diagnostics)$' \
-  -o /tmp/x3_odom_validation_2026-08-20 \
+  -o /tmp/x3_odom_validation_YYYY-MM-DD_lifted
 ```
+
+Replace `YYYY-MM-DD` and add a run suffix when needed; never overwrite or append
+new evidence to an earlier bag.
 
 Regex recording keeps discovery open for the short-lived pulse publisher. Add
 `--require-recorder` to each `safe_cmd_vel_pulse.py` command so motion cannot
@@ -205,9 +222,9 @@ there is not exactly one actuator subscriber from `driver_node`. A passive
 Pass criteria:
 
 - [ ] Forward sign gate: all normalized wheel deltas positive.
-- [ ] Forward ground-distance gate: odom `delta x > +0.10 m`; lateral/yaw leakage recorded.
+- [ ] Forward integration gate: calculated odom `delta x` is positive; lateral/yaw leakage recorded. This is not a ground-distance measurement while lifted.
 - [ ] Strafe-left sign gate: `FL- FR+ BL+ BR-`.
-- [ ] Strafe ground-distance gate: odom `delta y > +0.10 m`; forward/yaw leakage recorded.
+- [ ] Strafe integration gate: calculated odom `delta y` is positive; forward/yaw leakage recorded. This is not a ground-distance measurement while lifted.
 - [ ] Rotate CCW: `FL- FR+ BL- BR+`; odom yaw delta positive; translation leakage recorded.
 - [ ] `/vel_raw` and wheel velocities return near zero after each completed lifted pulse.
 - [ ] A zero command is observed after every completed lifted pulse.
@@ -234,14 +251,16 @@ ground truth was measured.
 
 ## Phase 4: Floor Breakaway and Repeatability
 
-Use a smooth level surface with a clear two-meter perimeter. Start a new floor bag and retain battery voltage in the recording.
+Use a smooth level surface with a clear two-meter perimeter. Start a new floor
+bag using the Phase 3 recorder procedure, with a fresh output name, and retain
+battery voltage in the recording.
 
 Run one-second bounded pulses, stopping if the robot moves unexpectedly:
 
 ```bash
-python3 tools/safe_cmd_vel_pulse.py --x 0.15 --duration 1.0
-python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.0
-python3 tools/safe_cmd_vel_pulse.py --x 0.25 --duration 1.0
+python3 tools/safe_cmd_vel_pulse.py --x 0.15 --duration 1.0 --require-recorder
+python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.0 --require-recorder
+python3 tools/safe_cmd_vel_pulse.py --x 0.25 --duration 1.0 --require-recorder
 ```
 
 - [ ] Record the lowest repeatable breakaway speed; do not label one failed speed as deadband without repetitions.

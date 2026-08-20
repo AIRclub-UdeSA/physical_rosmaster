@@ -76,8 +76,10 @@ Observed endpoint ownership:
 - `odom -> base_footprint`: available from the EKF while raw odom TF was disabled
 
 The live driver loaded `cmd_vel_timeout: 0.5`, encoder order `[1, 0, 3, 2]`,
-signs `[1.0, 1.0, 1.0, 1.0]`, and CPR `1040.0`. The order, signs, and CPR
-remain provisional pending a lifted per-wheel test.
+signs `[1.0, 1.0, 1.0, 1.0]`, and CPR `1040.0`. At this point in the session,
+the order, signs, and CPR were still provisional; the later
+direction-controlled hand test superseded the order/sign status while CPR
+remained provisional.
 
 Measured rates were approximately:
 
@@ -207,6 +209,20 @@ The operator inspected the powered-off wiring against that diagram and found
 no discrepancy. No cables were moved. The previously proposed `M1 <-> M4` and
 `M2 <-> M3` swaps are withdrawn. The source configuration is corrected to the
 measured packet-field mapping `[0, 2, 1, 3]` with all-positive signs.
+
+The operator later explicitly confirmed the physical Yahboom layout as
+`[FL, FR, BL, BR] = [M4, M2, M3, M1]`. Combining that inspection with the
+isolated hand rotations records the empirical packet-to-port relationship as:
+
+| Physical wheel | PCB port | Raw encoder packet field |
+| --- | --- | --- |
+| Front-left | `M4` | `m1` |
+| Front-right | `M2` | `m3` |
+| Back-left | `M3` | `m2` |
+| Back-right | `M1` | `m4` |
+
+This empirical relationship does not imply that `Rosmaster_Lib` itself maps or
+documents lowercase packet-field names as uppercase PCB port labels.
 
 The repeat direct captures sent no motion commands. Firmware motion remained
 zero and battery voltage stayed between `10.3 V` and `10.4 V`. The probe then

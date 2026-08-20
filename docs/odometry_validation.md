@@ -81,6 +81,12 @@ whole wheel toward the camera/front of the robot. Isolated hand rotations found
 configuration therefore uses `encoder_order: [0, 2, 1, 3]` and all-positive
 `encoder_signs`.
 
+The operator separately confirmed Yahboom's physical PCB port layout as
+`[FL, FR, BL, BR] = [M4, M2, M3, M1]`. Combining the physical inspection with
+the isolated hand test gives the empirical relationship
+`[m1, m2, m3, m4] = [M4, M3, M2, M1]`. The lowercase names are report-packet
+fields; the uppercase names are printed controller ports.
+
 The earlier proposed `M1 <-> M4` and `M2 <-> M3` cable swaps were withdrawn.
 The operator verified the powered-off wiring against Yahboom's diagram, and
 the installed `Rosmaster_Lib` only names four consecutive encoder packet fields

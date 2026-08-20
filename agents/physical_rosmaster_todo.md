@@ -70,6 +70,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Reject encoder counter wrap/reset discontinuities and make wheel channel order/signs configurable.
 - [x] Validate the `x3-c` packet-field mapping with direction-controlled hand tests: `[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with signs `[+, +, +, +]`.
 - [x] Visually verify the powered-off motor wiring against Yahboom's diagram; no cable move was required.
+- [x] Record the confirmed Yahboom PCB layout `[FL, FR, BL, BR] = [M4, M2, M3, M1]` separately from the empirical packet-field mapping.
 - [x] Withdraw the proposed cable swaps: `Rosmaster_Lib`'s `m1..m4` names are packet positions, not evidence of PCB `M1..M4` port identity.
 - [x] Rebuild and deploy corrected `encoder_order: [0, 2, 1, 3]`; subsequent floor observations matched all three expected wheel-sign patterns.
 - [ ] Repeat forward, strafe, and rotate validation with the robot securely lifted.

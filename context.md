@@ -66,8 +66,18 @@ Verify this repo:
 
 ```bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
-git status --short
-git pull --ff-only
+git status --short --branch
+git log -1 --oneline
+```
+
+Before updating, confirm which revision the validation session requires. Never
+switch branches or pull over robot-local changes. For the normal post-merge
+deployment, fetch and fast-forward `main` explicitly:
+
+```bash
+git fetch origin
+git switch main
+git pull --ff-only origin main
 ```
 
 Build:
@@ -91,17 +101,17 @@ source install/setup.bash
  - `yahboomcar_base_node/src/base_node_X3.cpp` computes 4-wheel mecanum kinematics from `/joint_states` and integrates velocities into `/odom_raw` (falls back to `/vel_raw` if joint states are absent).
  - `robot_localization` fuses `/odom_raw` with IMU and publishes `/odom`.
  
- Hardware validation findings:
- 
- - `get_motor_encoder()` returns four 32-bit signed counters.
+Hardware validation findings:
+
+- `get_motor_encoder()` returns four 32-bit signed counters.
 - Floor pulse tests verified that encoder counters increment and `/odom_raw` integrates during motion, but they did not satisfy the lifted validation gate or provide ground-truth calibration.
- - The direction-controlled 2026-08-20 hand test validated raw packet-field order `[FL, FR, BL, BR] = [m1, m3, m2, m4]` with signs `[+, +, +, +]`.
- - The operator verified the powered-off cabling against Yahboom's diagram. `Rosmaster_Lib`'s `m1..m4` names are packet positions, not proven PCB motor-port labels, so no cable swap is required.
+- The direction-controlled 2026-08-20 hand test validated raw packet-field order `[FL, FR, BL, BR] = [m1, m3, m2, m4]` with signs `[+, +, +, +]`.
+- The operator confirmed Yahboom's powered-off PCB port layout: `[FL, FR, BL, BR] = [M4, M2, M3, M1]`. Combined with the hand test, the empirical packet-to-port relationship is `[m1, m2, m3, m4] = [M4, M3, M2, M1]`. No cable swap is required.
 - With the rebuilt mapping, floor observations matched the forward, strafe-left, and CCW wheel-sign patterns. Wheel magnitudes remain strongly imbalanced, and floor yaw commands `0.12` and `0.30` did not move the encoders; `0.50` did. A true lifted repetition remains outstanding.
- - Earlier floor testing revealed a motor deadband at low speeds (0.10 m/s).
- - Standard recovery checklist is in `agents/x3-c_validation_checklist.md`.
- 
- ## Immediate Robot-Side Work
+- Earlier floor testing revealed a motor deadband at low speeds (0.10 m/s).
+- Standard recovery checklist is in `agents/x3-c_validation_checklist.md`.
+
+## Immediate Robot-Side Work
  
 1. Follow `agents/x3-c_validation_checklist.md` for hardware recovery and validation.
 2. Repeat the forward, strafe, and rotation sign checks with the robot securely lifted.
