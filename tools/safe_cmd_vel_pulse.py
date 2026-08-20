@@ -35,6 +35,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--yaw", type=finite_float, default=0.0)
     parser.add_argument("--duration", type=finite_float, required=True)
     parser.add_argument("--discovery-timeout", type=finite_float, default=3.0)
+    parser.add_argument(
+        "--require-recorder",
+        action="store_true",
+        help="Wait for a rosbag2_recorder /cmd_vel subscription",
+    )
     args = parser.parse_args()
 
     if abs(args.x) > MAX_LINEAR_SPEED or abs(args.y) > MAX_LINEAR_SPEED:
@@ -69,7 +74,12 @@ def publish_repeatedly(
         time.sleep(0.02)
 
 
-def validate_graph(node: Node, timeout: float) -> None:
+def validate_graph(
+    node: Node,
+    publisher,
+    timeout: float,
+    require_recorder: bool = False,
+) -> None:
     """Require one motor driver and no competing velocity publisher."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -80,16 +90,24 @@ def validate_graph(node: Node, timeout: float) -> None:
             for endpoint in subscribers
             if endpoint.node_name != "rosbag2_recorder"
         ]
+        recorder_present = any(
+            endpoint.node_name == "rosbag2_recorder"
+            for endpoint in subscribers
+        )
         publishers = node.get_publishers_info_by_topic("/cmd_vel")
         other_publishers = [
             endpoint
             for endpoint in publishers
             if endpoint.node_name != node.get_name()
         ]
+        required_match_count = 2 if require_recorder else 1
+        matched_subscriptions = publisher.get_subscription_count()
         if (
             len(actuator_subscribers) == 1
             and actuator_subscribers[0].node_name == "driver_node"
             and not other_publishers
+            and (not require_recorder or recorder_present)
+            and matched_subscriptions >= required_match_count
         ):
             return
 
@@ -105,10 +123,24 @@ def validate_graph(node: Node, timeout: float) -> None:
         for endpoint in publishers
         if endpoint.node_name != node.get_name()
     )
+    recorder_names = sorted(
+        endpoint.node_name
+        for endpoint in subscribers
+        if endpoint.node_name == "rosbag2_recorder"
+    )
+    matched_subscriptions = publisher.get_subscription_count()
     raise RuntimeError(
         "unsafe ROS graph: expected only one driver_node actuator and no "
-        "other publishers; actuator_subscribers=%s other_publishers=%s"
-        % (actuator_names, other_names)
+        "other publishers; actuator_subscribers=%s other_publishers=%s "
+        "recorder_subscribers=%s require_recorder=%s "
+        "compatible_subscription_count=%d"
+        % (
+            actuator_names,
+            other_names,
+            recorder_names,
+            require_recorder,
+            matched_subscriptions,
+        )
     )
 
 
@@ -121,7 +153,12 @@ def main() -> int:
     zero = Twist()
 
     try:
-        validate_graph(node, args.discovery_timeout)
+        validate_graph(
+            node,
+            publisher,
+            args.discovery_timeout,
+            args.require_recorder,
+        )
         publish_repeatedly(node, publisher, zero, 3)
 
         command = Twist()

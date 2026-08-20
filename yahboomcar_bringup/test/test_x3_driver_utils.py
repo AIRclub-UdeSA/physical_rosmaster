@@ -17,11 +17,11 @@ def test_encoder_mapping_and_signs() -> None:
     """Raw channels are reordered and signed into FL, FR, BL, BR."""
     result = map_encoder_counts(
         raw_counts=(10, 20, 30, 40),
-        order=(3, 1, 2, 0),
+        order=(0, 2, 1, 3),
         signs=(1, 1, 1, 1),
     )
 
-    assert result == (40, 20, 30, 10)
+    assert result == (10, 30, 20, 40)
 
 
 def test_encoder_configuration_rejects_duplicate_channels() -> None:

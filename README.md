@@ -125,7 +125,8 @@ Current flow:
 Validation status & checklist:
 
 - Lifted tests verified encoder feedback and raw odometry calculation.
-- Per-wheel hand testing exposed a motor-cable permutation relative to Yahboom's factory X3 layout. Rewiring and post-rewire lifted validation remain documented in `agents/x3-c_validation_checklist.md`.
+- Direction-controlled per-wheel hand testing validated raw packet-field order `[m1, m3, m2, m4] = [FL, FR, BL, BR]`, with forward-positive signs on all four wheels. The earlier wiring-fault conclusion was withdrawn because the library field names do not identify PCB motor ports.
+- The rebuilt mapping passed lifted forward, strafe-left, and CCW wheel-sign gates. Significant per-wheel magnitude/yaw bias and provisional CPR remain documented in `agents/x3-c_validation_checklist.md`.
 
 Validation probe tools:
 

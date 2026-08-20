@@ -9,9 +9,8 @@ driver_node:
     angular_limit: 5.0
     cmd_vel_timeout: 0.5
     encoder_cpr: 1040.0
-    # Expected after restoring Yahboom's M4/M2/M3/M1 factory wheel wiring.
-    # Raw channels are zero-based m1..m4. Output is FL, FR, BL, BR.
-    # Re-run the per-wheel hand test before treating these as validated.
-    encoder_order: [3, 1, 2, 0]
+    # Validated on x3-c by isolated forward hand rotations on 2026-08-20.
+    # Raw packet fields are zero-based m1..m4. Output is FL, FR, BL, BR.
+    encoder_order: [0, 2, 1, 3]
     encoder_signs: [1.0, 1.0, 1.0, 1.0]
     encoder_max_delta_ticks: 5000

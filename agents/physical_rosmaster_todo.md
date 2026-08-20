@@ -67,11 +67,13 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [ ] Tune covariance values from repeated ground-truth floor runs.
 - [x] Add a motor-command watchdog, command limits, repeated zero commands on shutdown, and a bounded `/cmd_vel` pulse tool.
 - [x] Reject encoder counter wrap/reset discontinuities and make wheel channel order/signs configurable.
-- [x] Diagnose the pre-rewire `x3-c` cable mapping by hand: `[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with observed signs `[+, +, +, -]`.
-- [ ] With motor power disconnected, restore Yahboom's factory layout by swapping complete cables `M1 <-> M4` and `M2 <-> M3`.
-- [ ] Repeat the hand test after rewiring and confirm expected `[FL, FR, BL, BR] = [m4, m2, m3, m1]` order and per-wheel signs.
+- [x] Validate the `x3-c` packet-field mapping with direction-controlled hand tests: `[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with signs `[+, +, +, +]`.
+- [x] Visually verify the powered-off motor wiring against Yahboom's diagram; no cable move was required.
+- [x] Withdraw the proposed cable swaps: `Rosmaster_Lib`'s `m1..m4` names are packet positions, not evidence of PCB `M1..M4` port identity.
+- [x] Rebuild and deploy corrected `encoder_order: [0, 2, 1, 3]`, then repeat lifted forward, strafe, and rotate validation; all three wheel-sign patterns passed.
 - [x] Rebuild `yahboomcar_base_node` and run the focused X3 odometry regression locally.
-- [ ] Verify `/odom_raw` twist and pose on the robot during forward, strafe, and rotate commands.
+- [x] Verify `/odom_raw` twist and pose on the lifted robot during forward, strafe, and rotate commands.
+- [ ] Resolve the large per-wheel magnitude imbalance and confirm `encoder_cpr` with exact marked rotations before ground-truth calibration.
 
 ## Phase 4: Implement Correct Real Odometry If Hardware Allows
 

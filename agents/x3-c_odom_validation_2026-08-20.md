@@ -146,94 +146,141 @@ tool was corrected to require exactly one actuator subscriber named
 publisher or other actuator subscriber.
 
 After two initial windows in which the operator had not rotated during the
-active capture, synchronized no-command hand tests identified all four raw
-channels and directions:
+active capture, a first synchronized no-command pass identified the dominant
+channel for every physical wheel. That pass reported a negative back-right
+delta, but the verbal direction did not have an unambiguous spatial reference.
+It was enough to identify channels, not to diagnose encoder polarity or wiring.
 
-| Physical wheel, rotated forward | Raw channel | Dominant raw delta |
+After a powered-off inspection found that the motor cabling matched Yahboom's
+diagram, the test was repeated with the operator, camera, and robot all facing
+the same direction. Forward rolling was explicitly defined as moving the top
+of the whole wheel toward the camera/front. The repeat produced:
+
+| Physical wheel, rolled forward | Raw packet field | Dominant raw delta |
 | --- | --- | ---: |
-| Front-left | `m1` | `+1371` |
-| Front-right | `m3` | `+1424` |
-| Back-left | `m2` | `+866` |
-| Back-right | `m4` | `-1886` |
+| Front-left | `m1` | `+6305` |
+| Front-right | `m3` | `+5932` |
+| Back-left | `m2` | `+6733` |
+| Back-right | `m4` | `+5984` |
 
-The back-left capture included approximately `-175` incidental ticks on `m1`,
-but the `m2` response was dominant. The back-right capture included only small
-incidental changes (`m1 +28`, `m3 +9`). The observations establish the
-pre-rewire cable state:
+The back-left test had an incidental `m1` change of about `-36`. The back-right
+test had incidental changes of about `m1 +109` and `m3 +83`. These were each
+under 2% of the dominant change and do not affect channel identification. The
+validated configuration is:
 
 ```yaml
 encoder_order: [0, 2, 1, 3]
-encoder_signs: [1.0, 1.0, 1.0, -1.0]
+encoder_signs: [1.0, 1.0, 1.0, 1.0]
 ```
 
-The operator rotated each wheel approximately, not by an exact marked turn,
-so these observations do not establish CPR. `encoder_cpr: 1040.0` remains
-provisional.
+The rotations were approximate rather than exact marked turns, so they do not
+establish CPR. `encoder_cpr: 1040.0` remains provisional.
 
 During the front-right capture, the USB serial device reset and changed from
 `/dev/ttyUSB0` to `/dev/ttyUSB2`. The stable symlink remained available at
 `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`; the driver configuration
 and probe now use that path.
 
-Reinterpreting the earlier powered pulses with the confirmed order and signs
+Reinterpreting the earlier powered pulses with the validated order and signs
 gives forward wheel deltas of approximately
-`[+1.1479, +4.6580, +1.3533, -1.7641] rad` and positive-Y deltas of
-`[-1.5527, +4.6459, +1.3775, +1.7218] rad`. In both cases the normalized
-back-right direction is inconsistent with the requested chassis motion. This
-must be rechecked under the corrected live configuration while lifted; the
-robot must not proceed to floor motion until all four physical directions are
-correct.
+`[+1.1479, +4.6580, +1.3533, +1.7641] rad` and positive-Y deltas of
+`[-1.5527, +4.6459, +1.3775, -1.7218] rad`. Their signs match the expected
+forward pattern `FL+ FR+ BL+ BR+` and positive-Y pattern
+`FL- FR+ BL+ BR-`. Their unequal magnitudes still require investigation and a
+repeat under the corrected live configuration, documented below.
 
-## Wiring diagnosis and planned correction
+## Packet fields are not PCB port labels
 
-The operator raised the possibility that motor cables had been connected to
-the wrong controller ports. Yahboom's official
+The installed V3.3.9 `Rosmaster_Lib` decodes four consecutive signed encoder
+fields from `FUNC_REPORT_ENCODER` and returns them as `(m1, m2, m3, m4)`. The
+Python code contains no mapping from those packet positions to the controller's
+printed motor-port labels. Comparing the packet-field names directly with the
+official
 [ROSMASTER X3 Wiring Introduction](https://github.com/YahboomTechnology/ROSMASTERX3/blob/main/01.About%20ROSMASTER%20X3/1.%20Wiring%20Introduction/1.%20Wiring%20Introduction.pdf)
-specifies the factory physical layout as:
+therefore cannot diagnose a cable permutation.
 
-| Factory controller port | Physical wheel |
-| --- | --- |
-| `M4` | Front-left |
-| `M2` | Front-right |
-| `M3` | Back-left |
-| `M1` | Back-right |
+The operator inspected the powered-off wiring against that diagram and found
+no discrepancy. No cables were moved. The previously proposed `M1 <-> M4` and
+`M2 <-> M3` swaps are withdrawn. The source configuration is corrected to the
+measured packet-field mapping `[0, 2, 1, 3]` with all-positive signs.
 
-This differs from every measured pre-rewire cable assignment. Restoring the
-factory layout requires two complete-cable swaps with robot and motor power
-fully disconnected:
+The repeat direct captures sent no motion commands. Firmware motion remained
+zero and battery voltage stayed between `10.3 V` and `10.4 V`. The probe then
+exited and released the controller serial port.
 
-- `M1 <-> M4`, moving front-left to `M4` and back-right to `M1`.
-- `M2 <-> M3`, moving front-right to `M2` and back-left to `M3`.
+## Corrected deployment and lifted sign validation
 
-The connectors must remain keyed as built; no plug reversal or individual-pin
-change is intended. The source now carries the expected post-rewire order
-`[FL, FR, BL, BR] = [m4, m2, m3, m1]`, encoded as
-`encoder_order: [3, 1, 2, 0]`, with provisional all-positive signs. These
-parameters have not been rebuilt or deployed and must be verified by repeating
-the no-command hand test after the cable move.
+The measured mapping was installed as:
 
-A final 10-sample direct probe sent no motion commands. Firmware motion stayed
-zero, encoders stayed at `[2126, 1318, 2970, -1877]`, and battery voltage was
-`10.5 V` in every sample. The serial port was then released so the robot could
-be powered down and workstation-only work could continue.
+```yaml
+encoder_order: [0, 2, 1, 3]
+encoder_signs: [1.0, 1.0, 1.0, 1.0]
+```
+
+All 19 normal packages rebuilt successfully. The focused X3 regression suites
+passed 12 C++ odometry tests, 7 Python driver-helper tests, and 2 pulse-recorder
+gating tests. Targeted flake8, pydocstyle, Python compilation, and
+`git diff --check` also passed. A broad
+package-level `colcon test` reported 246 pre-existing lint failures in legacy
+R2, calibration, patrol, and other untouched vendor files; the functional X3
+tests themselves passed.
+
+The clean core loaded the corrected values, showed zero idle `/cmd_vel`
+publishers, exactly one driver subscriber, and one publisher each for
+`/joint_states`, `/odom_raw`, and `/odom`. Stationary wheel, firmware, and raw
+odom velocities were all zero.
+
+Recorded corrected trials were:
+
+| Command | Nonzero duration | Wheel delta `[FL, FR, BL, BR]` rad | Raw odom `[x, y, yaw]` | Evidence bag |
+| --- | ---: | --- | --- | --- |
+| `x=+0.12` | `0.757 s` | `[+0.6223, +2.0904, +0.6525, +1.9031]` | `[+0.0384, +0.0206, +0.1359]` | `/tmp/x3_lifted_corrected_qos_2026-08-20` |
+| `y=+0.12` | `0.757 s` | `[-0.5800, +0.8337, +0.2356, -0.1269]` | `[-0.0047, +0.0141, +0.0526]` | `/tmp/x3_lifted_corrected_strafe_rotate_2026-08-20` |
+| `yaw=+0.12` | `0.758 s` | `[0, 0, 0, 0]` | `[0, 0, 0]` | `/tmp/x3_lifted_corrected_rotate_verified_2026-08-20` |
+| `yaw=+0.30` | `0.757 s` | `[0, 0, 0, 0]` | `[0, 0, 0]` | `/tmp/x3_lifted_corrected_rotate_030_2026-08-20` |
+| `yaw=+0.50` | `0.757 s` | `[-0.1752, +0.4833, -0.0242, +0.2175]` | `[+0.0017, +0.0051, +0.0450]` | `/tmp/x3_lifted_corrected_rotate_050_2026-08-20` |
+
+The forward pattern `FL+ FR+ BL+ BR+`, strafe-left pattern
+`FL- FR+ BL+ BR-`, and CCW pattern `FL- FR+ BL- BR+` all passed. The `+0.12`
+and `+0.30 rad/s` yaw commands did not move the encoders; `+0.50 rad/s` was the
+first tested yaw command to break through. Wheel magnitudes were strongly
+unequal in every moving trial, with a particularly weak back-left response in
+the rotation trial. This leaves CPR, controller/motor response, low-voltage
+behavior, and per-wheel mechanical variation as calibration work; it does not
+invalidate the now-repeated channel-order and sign evidence.
+
+The first two forward recording attempts were not accepted as evidence. One
+bag missed `/cmd_vel` discovery and another captured only an incompatible-QoS
+zero publisher. A later rotation bag likewise missed the short-lived command
+publisher. The recorder procedure now uses a volatile `/cmd_vel` QoS override,
+regex discovery, and `safe_cmd_vel_pulse.py --require-recorder`; the analyzer
+also supports the safety tool's timestamped `/rosout` record as a fallback when
+that record is available.
 
 ## Result and blockers
 
-Deployment and stationary Phase 3 graph validation passed. The hand test and
-official factory diagram diagnosed a complete motor-port permutation. Lifted
-kinematic validation is not accepted until the powered-off cable swaps are
-completed, the hand mapping is repeated, and the corrected configuration is
-rebuilt for bounded forward, strafe, and rotation tests. The low battery
-remains a recorded limitation; the operator explicitly accepted it for lifted
-testing, while the checklist floor-test gate remains unmet.
+Deployment, stationary graph checks, and all three lifted wheel-sign gates
+passed. The direction-controlled hand test and powered trials validate packet
+order and polarity, and the wiring-fault diagnosis is withdrawn. Ground-truth
+odometry calibration is not accepted because CPR is provisional, wheel
+magnitudes are strongly imbalanced, and the battery was only `10.3-10.4 V`
+before motion. The operator explicitly accepted that voltage for lifted tests;
+the checklist floor-test gate remains unmet.
 
 ## Safety state at end of session
 
-- The only nonzero commands were the two bounded lifted pulses documented above.
-- A final explicit zero `/cmd_vel` command was issued.
-- The clean core exited normally; the driver shutdown path ran.
-- The final ROS graph had no `/cmd_vel` topic.
-- The stable controller path was released; it currently resolves to `/dev/ttyUSB2`.
-- Autostart processes remained stopped for this container session.
-- The final battery reading was a stable `10.5 V`; robot power-off was left to
-  the operator and was not independently confirmed.
+- Every nonzero command used the bounded safety tool and lasted `0.8 s`.
+- Recorder setup required three forward pulses, one strafe pulse, two
+  `yaw=+0.12` pulses, one `yaw=+0.30` pulse, and one `yaw=+0.50` pulse in the
+  corrected session; incomplete bags are explicitly excluded above.
+- The safety tool sent redundant zeros after every pulse. Final wheel,
+  firmware, and raw-odom velocities were zero, with no `/cmd_vel` publisher.
+- The clean core exited normally and the driver shutdown path ran.
+- The motor driver remained stopped during every repeat hand capture.
+- The direct probe exited and released the motor-controller serial port.
+- The stable controller path was released; after the latest power cycle it
+  resolves to `/dev/ttyUSB0`.
+- The actuator core is stopped. Unrelated camera and lidar autostart processes
+  were outside this validation and may still be running.
+- The latest direct-probe battery readings were `10.3-10.4 V`. Robot power
+  remains under operator control and was not independently switched off.

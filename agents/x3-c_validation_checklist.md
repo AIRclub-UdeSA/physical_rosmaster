@@ -22,7 +22,7 @@ The driver also stops the controller when `/cmd_vel` is stale for 0.5 seconds. T
 - [ ] Motor power switch is confirmed and reachable.
 - [x] Robot was confirmed securely lifted before the 2026-08-20 Phase 3 pulses.
 - [ ] A person supervises the robot and can cut motor power.
-- [x] Autostart and unrelated navigation, joystick, line-follow, laser, voice, and color-tracking nodes are stopped for the current validation session.
+- [x] Autostart actuator/core duplicates and competing `/cmd_vel` publishers are stopped for the current validation session. Camera and lidar processes may remain because they do not command motion.
 - [ ] Optional host fix: `/etc/hosts` contains `127.0.1.1 x3-c`.
 
 Do not continue to a floor test until all lifted checks pass.
@@ -57,7 +57,9 @@ colcon test --packages-select yahboomcar_base_node --ctest-args -R test_x3_odome
 colcon test-result --verbose
 
 cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 -m pytest -q yahboomcar_bringup/test/test_x3_driver_utils.py
+python3 -m pytest -q \
+  yahboomcar_bringup/test/test_x3_driver_utils.py \
+  tools/test_safe_cmd_vel_pulse.py
 python3 tools/rosmaster_lib_probe.py --hash-only
 ```
 
@@ -66,6 +68,7 @@ Pass criteria:
 - [x] All 19 normal packages build.
 - [x] Focused C++ odometry tests pass.
 - [x] X3 driver safety/encoder helper tests pass.
+- [x] Lifted-pulse recorder gating tests pass.
 - [x] Installed `Rosmaster_Lib` matches public V3.3.9.
 - [x] `x3_driver.yaml` contains a positive `cmd_vel_timeout`.
 - [x] `use_joy` remains false by default.
@@ -90,35 +93,29 @@ cd /root/yahboomcar_ws/src/physical_rosmaster
 python3 tools/rosmaster_lib_probe.py --samples 500 --period 0.1
 ```
 
-Pre-rewire observations from 2026-08-20:
+Direction-controlled observations from 2026-08-20:
 
 | Physical wheel | Raw channel | Delta sign | Delta ticks | Ticks/revolution |
 | --- | --- | ---: | ---: | ---: |
-| Front-left | `m1` | `+` | `+1371` | Not measured |
-| Front-right | `m3` | `+` | `+1424` | Not measured |
-| Back-left | `m2` | `+` | `+866` | Not measured |
-| Back-right | `m4` | `-` | `-1886` | Not measured |
+| Front-left | `m1` | `+` | `+6305` | Not measured |
+| Front-right | `m3` | `+` | `+5932` | Not measured |
+| Back-left | `m2` | `+` | `+6733` | Not measured |
+| Back-right | `m4` | `+` | `+5984` | Not measured |
 
-These observations describe the cable fault; they are not the desired software
-mapping. Yahboom's official X3 wiring diagram specifies:
+For this repeat, the operator and camera faced the same direction. Forward was
+defined as moving the top of the whole wheel toward the camera/front, and only
+one wheel was intentionally moved in each synchronized capture. This resolves
+the first pass's ambiguous back-right direction.
 
-| Factory controller port | Physical wheel |
-| --- | --- |
-| `M4` | Front-left |
-| `M2` | Front-right |
-| `M3` | Back-left |
-| `M1` | Back-right |
+The validated software mapping is `[FL, FR, BL, BR] = [m1, m3, m2, m4]`, or
+zero-based `encoder_order: [0, 2, 1, 3]`, with
+`encoder_signs: [1.0, 1.0, 1.0, 1.0]`.
 
-With all robot and motor power disconnected and controller LEDs off, move the
-complete keyed motor/encoder cables without reversing or repinning a plug:
-
-- [ ] Swap `M1 <-> M4`.
-- [ ] Swap `M2 <-> M3`.
-- [ ] Restore power with the robot lifted and repeat the four hand rotations.
-
-The expected post-rewire order is `[FL, FR, BL, BR] = [m4, m2, m3, m1]`, or
-zero-based `encoder_order: [3, 1, 2, 0]`. The signs must be measured again;
-`[1.0, 1.0, 1.0, 1.0]` is provisional until then.
+Do not infer PCB motor-port wiring from these field names. The installed
+`Rosmaster_Lib` unpacks four consecutive encoder report fields and returns them
+as `m1..m4`; it does not map those names to the controller's printed `M1..M4`
+labels. The operator inspected the powered-off wiring against Yahboom's diagram
+and found it correct. The earlier proposed cable swaps are withdrawn.
 
 Update only the versioned parameters in `yahboomcar_bringup/param/x3_driver.yaml`:
 
@@ -128,9 +125,10 @@ Update only the versioned parameters in `yahboomcar_bringup/param/x3_driver.yaml
 
 Then rebuild `yahboomcar_bringup` and repeat the hardware-free tests.
 
-The synchronized captures established the current cable identities. The
-back-left capture also had an incidental `m1` delta of about `-175`, but `m2`
-was the clearly dominant channel. The turns were approximate, so they are not
+Small incidental changes appeared while handling the chassis: about `-36` on
+`m1` during the back-left test, and `+109` on `m1` plus `+83` on `m3` during the
+back-right test. Each was under 2% of the dominant wheel change and does not
+affect channel identification. The turns were approximate, so they are not
 valid CPR evidence; `encoder_cpr: 1040.0` remains provisional until a marked,
 exact-turn test.
 
@@ -168,24 +166,35 @@ Pass criteria before motion:
 
 Stationary evidence from 2026-08-20 is recorded in
 [`x3-c_odom_validation_2026-08-20.md`](x3-c_odom_validation_2026-08-20.md).
-Motion remains blocked until the battery is above 12.0 V and the robot is
-securely lifted for the per-wheel test.
+Floor motion remains blocked until the battery is above 12.0 V. The operator
+explicitly accepted the low battery for the supervised lifted tests documented
+below.
 
 Start a new evidence bag; do not reuse the August 16 pre-encoder bag:
 
 ```bash
-ros2 bag record -o /tmp/x3_odom_validation_2026-08-20 \
-  /cmd_vel /joint_states /vel_raw /odom_raw /odom \
-  /imu/data_raw /imu/data /voltage /edition /tf /diagnostics
+ros2 bag record \
+  --qos-profile-overrides-path \
+  /root/yahboomcar_ws/src/physical_rosmaster/tools/x3_validation_qos.yaml \
+  --regex '^/(cmd_vel|joint_states|vel_raw|odom_raw|odom|rosout|imu/data_raw|imu/data|voltage|edition|tf|diagnostics)$' \
+  -o /tmp/x3_odom_validation_2026-08-20 \
 ```
+
+Regex recording keeps discovery open for the short-lived pulse publisher. Add
+`--require-recorder` to each `safe_cmd_vel_pulse.py` command so motion cannot
+start until both the driver and `rosbag2_recorder` are QoS-compatible matched
+subscriptions on `/cmd_vel`. The analyzer normally
+delimits trials from recorded `/cmd_vel` samples. If those samples are missing
+but the timestamped `safe_cmd_vel_pulse` start record exists on `/rosout`, it
+uses that record as a fallback.
 
 With the robot confirmed lifted, run bounded pulses from the repository root:
 
 ```bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5
-python3 tools/safe_cmd_vel_pulse.py --y 0.20 --duration 1.5
-python3 tools/safe_cmd_vel_pulse.py --yaw 0.50 --duration 1.5
+python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5 --require-recorder
+python3 tools/safe_cmd_vel_pulse.py --y 0.20 --duration 1.5 --require-recorder
+python3 tools/safe_cmd_vel_pulse.py --yaw 0.50 --duration 1.5 --require-recorder
 ```
 
 The pulse tool refuses to run if another `/cmd_vel` publisher exists or if
@@ -194,20 +203,31 @@ there is not exactly one actuator subscriber from `driver_node`. A passive
 
 Pass criteria:
 
-- [ ] Forward: all normalized wheel deltas positive; odom `delta x > +0.10 m`; lateral/yaw leakage recorded.
-- [ ] Strafe left: `FL- FR+ BL+ BR-`; odom `delta y > +0.10 m`; forward/yaw leakage recorded.
-- [ ] Rotate CCW: `FL- FR+ BL- BR+`; odom yaw delta positive; translation leakage recorded.
+- [x] Forward sign gate: all normalized wheel deltas positive.
+- [ ] Forward ground-distance gate: odom `delta x > +0.10 m`; lateral/yaw leakage recorded.
+- [x] Strafe-left sign gate: `FL- FR+ BL+ BR-`.
+- [ ] Strafe ground-distance gate: odom `delta y > +0.10 m`; forward/yaw leakage recorded.
+- [x] Rotate CCW: `FL- FR+ BL- BR+`; odom yaw delta positive; translation leakage recorded.
 - [x] `/vel_raw` and wheel velocities return near zero after each completed pulse.
 - [x] A zero command is observed after every completed pulse.
 - [x] No discontinuity, stale-input, duplicate-publisher, or TF-authority warning appears.
 
 Any incorrect sign stops the session. Correct order/sign parameters and repeat lifted validation before floor testing.
 
-The first 2026-08-20 forward and positive-Y pulses used the old provisional
-mapping and showed incorrect normalized signs. The subsequent hand test and
-factory diagram exposed incorrect motor-port assignments. Complete the cable
-swaps, repeat the hand test, then rebuild and repeat all three lifted pulses
-before accepting this phase.
+Corrected 2026-08-20 lifted results, each using a recorded 0.757-second
+nonzero command window:
+
+| Command | Wheel delta `[FL, FR, BL, BR]` rad | Raw odom `[x, y, yaw]` | Result |
+| --- | --- | --- | --- |
+| `x=+0.12` | `[+0.6223, +2.0904, +0.6525, +1.9031]` | `[+0.0384, +0.0206, +0.1359]` | Sign pass; large magnitude/yaw bias |
+| `y=+0.12` | `[-0.5800, +0.8337, +0.2356, -0.1269]` | `[-0.0047, +0.0141, +0.0526]` | Sign pass; large magnitude/yaw bias |
+| `yaw=+0.50` | `[-0.1752, +0.4833, -0.0242, +0.2175]` | `[+0.0017, +0.0051, +0.0450]` | Sign and yaw pass; weak BL response |
+
+Recorded `yaw=+0.12` and `yaw=+0.30` trials did not move the wheel encoders;
+`+0.50` was the first tested yaw command to break through. The corrected
+mapping passes all three sign gates, but CPR, per-wheel magnitude imbalance,
+and low-voltage behavior remain unresolved. Do not use lifted odom distance as
+a ground-distance calibration.
 
 ## Phase 4: Floor Breakaway and Repeatability
 

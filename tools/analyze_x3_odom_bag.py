@@ -7,6 +7,7 @@ import argparse
 import bisect
 import math
 from pathlib import Path
+import re
 from typing import Any, NamedTuple, Sequence
 
 import rosbag2_py
@@ -20,6 +21,13 @@ WHEEL_NAMES = (
     "front_right_joint",
     "back_left_joint",
     "back_right_joint",
+)
+PULSE_LOG_PATTERN = re.compile(
+    r"Starting bounded pulse: "
+    r"x=(?P<x>[+-]?\d+(?:\.\d+)?) "
+    r"y=(?P<y>[+-]?\d+(?:\.\d+)?) "
+    r"yaw=(?P<yaw>[+-]?\d+(?:\.\d+)?) "
+    r"duration=(?P<duration>\d+(?:\.\d+)?)s"
 )
 
 
@@ -67,6 +75,7 @@ def read_topics(bag_path: Path) -> dict[str, list[StampedMessage]]:
         "/cmd_vel",
         "/joint_states",
         "/odom_raw",
+        "/rosout",
         "/vel_raw",
         "/voltage",
     }
@@ -138,6 +147,32 @@ def command_windows(commands: Sequence[StampedMessage]) -> list[CommandWindow]:
     return windows
 
 
+def command_windows_from_logs(
+    logs: Sequence[StampedMessage],
+) -> list[CommandWindow]:
+    """Recover safety-tool windows when rosbag missed transient commands."""
+    windows = []
+    for stamped in logs:
+        if stamped.message.name != "safe_cmd_vel_pulse":
+            continue
+        match = PULSE_LOG_PATTERN.search(stamped.message.msg)
+        if match is None:
+            continue
+        duration_ns = int(
+            float(match.group("duration")) * NANOSECONDS_PER_SECOND
+        )
+        windows.append(
+            CommandWindow(
+                stamped.timestamp_ns,
+                stamped.timestamp_ns + duration_ns,
+                float(match.group("x")),
+                float(match.group("y")),
+                float(match.group("yaw")),
+            )
+        )
+    return windows
+
+
 def nearest_at_or_before(
     messages: Sequence[StampedMessage], timestamp_ns: int
 ) -> StampedMessage:
@@ -200,12 +235,17 @@ def summarize(
     messages: dict[str, list[StampedMessage]], settle_seconds: float
 ) -> None:
     """Print one deterministic summary for each recorded command window."""
-    required = {"/cmd_vel", "/joint_states", "/odom_raw"}
+    required = {"/joint_states", "/odom_raw"}
     missing = sorted(required - messages.keys())
     if missing:
         raise RuntimeError(f"bag is missing required topics: {missing}")
 
-    windows = command_windows(messages["/cmd_vel"])
+    windows = command_windows(messages.get("/cmd_vel", []))
+    window_source = "/cmd_vel"
+    if not windows:
+        windows = command_windows_from_logs(messages.get("/rosout", []))
+        window_source = "/rosout safety-tool fallback"
+    print(f"command_window_source: {window_source}")
     print(f"command_windows: {len(windows)}")
     settle_ns = int(settle_seconds * NANOSECONDS_PER_SECOND)
 

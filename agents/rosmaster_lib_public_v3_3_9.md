@@ -49,6 +49,11 @@ The public library exposes four motor encoder counters.
   - `ext_data[12:16]`: motor 4 encoder
 - `get_motor_encoder()` returns the cached `(m1, m2, m3, m4)` values.
 
+The names `m1..m4` identify positions in the firmware report packet. This
+Python library contains no mapping from those field positions to the printed
+PCB motor-port labels, so a mismatch between hand-measured packet order and a
+wiring diagram is not evidence that cables are connected to the wrong ports.
+
 Interpretation: real encoder-position odometry is probably possible if these counters update reliably on the physical robot and if we confirm ticks-per-revolution, wheel radius, and wheel ordering/signs.
 
 ## Current Repo Usage

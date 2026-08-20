@@ -95,17 +95,18 @@ source install/setup.bash
  
  - `get_motor_encoder()` returns four 32-bit signed counters.
  - Lifted motion tests verified that encoder counters increment and `/odom_raw` integrates properly during motion.
- - The 2026-08-20 lifted hand test found the pre-rewire cables as `[FL, FR, BL, BR] = [m1, m3, m2, m4]` with observed signs `[+, +, +, -]`, inconsistent with Yahboom's factory `[m4, m2, m3, m1]` layout.
+ - The direction-controlled 2026-08-20 hand test validated raw packet-field order `[FL, FR, BL, BR] = [m1, m3, m2, m4]` with signs `[+, +, +, +]`.
+ - The operator verified the powered-off cabling against Yahboom's diagram. `Rosmaster_Lib`'s `m1..m4` names are packet positions, not proven PCB motor-port labels, so no cable swap is required.
+ - The rebuilt mapping passed lifted forward, strafe-left, and CCW wheel-sign gates. Wheel magnitudes remain strongly imbalanced, and yaw commands `0.12` and `0.30` did not move the encoders; `0.50` did.
  - Earlier floor testing revealed a motor deadband at low speeds (0.10 m/s).
  - Standard recovery checklist is in `agents/x3-c_validation_checklist.md`.
  
  ## Immediate Robot-Side Work
  
- 1. Follow `agents/x3-c_validation_checklist.md` for hardware recovery and validation.
-2. With power fully off, restore factory wiring by swapping complete cables `M1 <-> M4` and `M2 <-> M3`.
-3. Repeat the no-command per-wheel hand test before rebuilding or accepting the provisional factory mapping.
-4. Repeat bounded forward, strafe, and rotation tests while lifted.
-5. Ensure battery is charged (> 12.0 V) before floor motion and ground-truth calibration.
+1. Follow `agents/x3-c_validation_checklist.md` for hardware recovery and validation.
+2. Measure exact encoder CPR with marked wheel rotations and investigate the per-wheel magnitude imbalance.
+3. Ensure battery is charged (> 12.0 V) before floor motion and ground-truth calibration.
+4. Run repeatable floor trials only after those gates pass.
 
 ## Verification Commands
 

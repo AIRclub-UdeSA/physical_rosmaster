@@ -71,19 +71,26 @@ Observed while the robot was lifted and commanded through `/cmd_vel`:
 
 This is enough to confirm that the reported encoder counters move with commanded motion while lifted. The next step is to capture the exact sign convention and compare the ROS `/vel_raw` and `/odom_raw` topics against these same motions.
 
-### x3-c 2026-08-20 Wiring Diagnosis
+### x3-c 2026-08-20 Encoder Mapping
 
-Synchronized forward hand rotations found the pre-rewire cable identities as
-`[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with observed signs
-`[+, +, +, -]`. That does not match Yahboom's factory X3 layout
-`[m4, m2, m3, m1]`. The planned powered-off correction is to swap the complete
-`M1 <-> M4` cables and the complete `M2 <-> M3` cables. Do not reverse a keyed
-plug or move individual pins.
+A direction-controlled repeat test defined forward as moving the top of each
+whole wheel toward the camera/front of the robot. Isolated hand rotations found
+`[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with signs `[+, +, +, +]`. The source
+configuration therefore uses `encoder_order: [0, 2, 1, 3]` and all-positive
+`encoder_signs`.
 
-The post-rewire order and signs must be confirmed by another no-command hand
-test before powered validation. The source configuration carries the expected
-factory order `[3, 1, 2, 0]` and provisional all-positive signs. CPR also
-remains provisional because the hand rotations were not exact marked turns.
+The earlier proposed `M1 <-> M4` and `M2 <-> M3` cable swaps were withdrawn.
+The operator verified the powered-off wiring against Yahboom's diagram, and
+the installed `Rosmaster_Lib` only names four consecutive encoder packet fields
+`m1..m4`; it does not establish that those names equal the controller's printed
+motor-port labels. CPR remains provisional because the hand rotations were not
+exact marked turns.
+
+After rebuilding this mapping, bounded lifted tests passed the expected wheel
+sign patterns for forward, strafe-left, and CCW rotation. Wheel magnitudes were
+strongly unequal, `yaw=+0.12` and `+0.30 rad/s` did not move the encoders, and
+`yaw=+0.50 rad/s` did. Treat ordering/signs as validated, but do not treat CPR,
+distance scale, or per-wheel response as calibrated.
 
 ## Stage 3: Compare Command, Firmware Velocity, And Encoders
 
@@ -101,9 +108,11 @@ Terminal B:
 ```bash
 source /opt/ros/humble/setup.bash
 source /root/yahboomcar_ws/install/setup.bash
-ros2 bag record -o /tmp/x3_odom_probe \
-  /cmd_vel /joint_states /vel_raw /odom_raw /odom \
-  /imu/data_raw /imu/data /voltage /edition /tf /diagnostics
+ros2 bag record \
+  --qos-profile-overrides-path \
+  /root/yahboomcar_ws/src/physical_rosmaster/tools/x3_validation_qos.yaml \
+  --regex '^/(cmd_vel|joint_states|vel_raw|odom_raw|odom|rosout|imu/data_raw|imu/data|voltage|edition|tf|diagnostics)$' \
+  -o /tmp/x3_odom_probe
 ```
 
 Do not run `rosmaster_lib_probe.py` while `driver_node` is active. Both
@@ -115,9 +124,9 @@ test.
 Motion commands, with wheels lifted first:
 
 ```bash
-python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5
-python3 tools/safe_cmd_vel_pulse.py --y 0.20 --duration 1.5
-python3 tools/safe_cmd_vel_pulse.py --yaw 0.50 --duration 1.5
+python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5 --require-recorder
+python3 tools/safe_cmd_vel_pulse.py --y 0.20 --duration 1.5 --require-recorder
+python3 tools/safe_cmd_vel_pulse.py --yaw 0.50 --duration 1.5 --require-recorder
 ```
 
 Repeat on the floor at low speed only after lifted tests behave correctly.
