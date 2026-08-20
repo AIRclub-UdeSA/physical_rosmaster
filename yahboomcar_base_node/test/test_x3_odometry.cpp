@@ -51,6 +51,67 @@ TEST(X3Odometry, RotatesBodyVelocityIntoOdomFrame)
   EXPECT_DOUBLE_EQ(result.heading, half_pi);
 }
 
+TEST(X3Odometry, UsesMidpointHeadingForCombinedMotion)
+{
+  const yahboomcar_base_node::OdomState state{0.0, 0.0, 0.0};
+  const yahboomcar_base_node::BodyVelocity velocity{1.0, 0.0, 1.0};
+
+  const auto result = yahboomcar_base_node::integrate_velocity(state, velocity, 1.0);
+
+  EXPECT_NEAR(result.x, std::cos(0.5), 1e-12);
+  EXPECT_NEAR(result.y, std::sin(0.5), 1e-12);
+  EXPECT_DOUBLE_EQ(result.heading, 1.0);
+}
+
+TEST(X3Odometry, AppliesCalibrationScalesToAllBodyAxes)
+{
+  const yahboomcar_base_node::BodyVelocity velocity{1.0, -2.0, 0.5};
+
+  const auto result = yahboomcar_base_node::scale_body_velocity(
+    velocity, 1.1, 0.8, 1.2);
+
+  EXPECT_DOUBLE_EQ(result.linear_x, 1.1);
+  EXPECT_DOUBLE_EQ(result.linear_y, -1.6);
+  EXPECT_DOUBLE_EQ(result.angular_z, 0.6);
+}
+
+TEST(X3Odometry, EvaluatesSourceFreshnessAtTimeoutBoundary)
+{
+  EXPECT_TRUE(yahboomcar_base_node::is_source_fresh(0.5, 0.5));
+  EXPECT_FALSE(yahboomcar_base_node::is_source_fresh(0.5001, 0.5));
+  EXPECT_FALSE(yahboomcar_base_node::is_source_fresh(-0.1, 0.5));
+  EXPECT_FALSE(yahboomcar_base_node::is_source_fresh(0.1, 0.0));
+}
+
+TEST(X3Odometry, FallsBackWhenJointStatesBecomeStale)
+{
+  EXPECT_TRUE(yahboomcar_base_node::should_use_joint_states(true, true, 0.1, 0.5));
+  EXPECT_FALSE(yahboomcar_base_node::should_use_joint_states(true, true, 0.6, 0.5));
+  EXPECT_FALSE(yahboomcar_base_node::should_use_joint_states(true, false, 0.1, 0.5));
+  EXPECT_FALSE(yahboomcar_base_node::should_use_joint_states(false, true, 0.1, 0.5));
+}
+
+TEST(X3Odometry, PublishesConfiguredFramesAndCovariances)
+{
+  builtin_interfaces::msg::Time stamp;
+  const yahboomcar_base_node::OdomState state{1.0, 2.0, 0.3};
+  const yahboomcar_base_node::BodyVelocity velocity{0.4, 0.2, -0.1};
+  const yahboomcar_base_node::OdomCovariances covariances{
+    0.11, 0.22, 0.33, 0.44, 0.55, 0.66};
+
+  const auto odom = yahboomcar_base_node::make_odometry_msg(
+    stamp, "custom_odom", "custom_base", state, velocity, covariances);
+
+  EXPECT_EQ(odom.header.frame_id, "custom_odom");
+  EXPECT_EQ(odom.child_frame_id, "custom_base");
+  EXPECT_DOUBLE_EQ(odom.pose.covariance[0], 0.11);
+  EXPECT_DOUBLE_EQ(odom.pose.covariance[7], 0.22);
+  EXPECT_DOUBLE_EQ(odom.pose.covariance[35], 0.33);
+  EXPECT_DOUBLE_EQ(odom.twist.covariance[0], 0.44);
+  EXPECT_DOUBLE_EQ(odom.twist.covariance[7], 0.55);
+  EXPECT_DOUBLE_EQ(odom.twist.covariance[35], 0.66);
+}
+
 TEST(X3Odometry, MecanumKinematicsForward)
 {
   yahboomcar_base_node::MecanumParams params{0.033, 0.080, 0.085};
@@ -82,7 +143,8 @@ TEST(X3Odometry, MecanumKinematicsRotateCCW)
 {
   yahboomcar_base_node::MecanumParams params{0.033, 0.080, 0.085};  // lx+ly = 0.165
   // FL: -10, FR: +10, BL: -10, BR: +10
-  // wz = (r / (4 * (lx+ly))) * (10 + 10 + 10 + 10) = 0.033 * 40 / (4 * 0.165) = 1.32 / 0.66 = 2.0 rad/s
+  // wz = (r / (4 * (lx+ly))) * (10 + 10 + 10 + 10)
+  //    = 0.033 * 40 / (4 * 0.165) = 2.0 rad/s
   yahboomcar_base_node::WheelDisplacements deltas{-10.0, 10.0, -10.0, 10.0};
 
   const auto vel = yahboomcar_base_node::compute_mecanum_body_velocity(deltas, params, 1.0);

@@ -85,6 +85,7 @@ source install/setup.bash
  
  - `yahboomcar_bringup/yahboomcar_bringup/Mcnamu_driver_X3.py` subscribes to `/cmd_vel`.
  - It calls `Rosmaster_Lib.Rosmaster.set_car_motion(...)`.
+ - It clamps motion commands, stops persistent commands after 0.5 seconds without an update, and sends repeated zero commands on startup/shutdown.
  - It polls `get_motor_encoder()` and publishes four wheel positions and angular velocities on `/joint_states`.
  - It publishes `/vel_raw` from `Rosmaster_Lib.Rosmaster.get_motion_data()`.
  - `yahboomcar_base_node/src/base_node_X3.cpp` computes 4-wheel mecanum kinematics from `/joint_states` and integrates velocities into `/odom_raw` (falls back to `/vel_raw` if joint states are absent).
@@ -94,15 +95,17 @@ source install/setup.bash
  
  - `get_motor_encoder()` returns four 32-bit signed counters.
  - Lifted motion tests verified that encoder counters increment and `/odom_raw` integrates properly during motion.
- - Floor testing revealed a motor deadband at low speeds (0.10 m/s) and a sign inversion during lateral strafe tests that requires per-wheel index/sign calibration.
+ - The 2026-08-20 lifted hand test found the pre-rewire cables as `[FL, FR, BL, BR] = [m1, m3, m2, m4]` with observed signs `[+, +, +, -]`, inconsistent with Yahboom's factory `[m4, m2, m3, m1]` layout.
+ - Earlier floor testing revealed a motor deadband at low speeds (0.10 m/s).
  - Standard recovery checklist is in `agents/x3-c_validation_checklist.md`.
  
  ## Immediate Robot-Side Work
  
  1. Follow `agents/x3-c_validation_checklist.md` for hardware recovery and validation.
- 2. Verify per-wheel encoder direction by rotating wheels by hand using `python3 tools/rosmaster_lib_probe.py --samples 500 --period 0.1`.
- 3. Ensure battery is charged (> 12.0 V) and test floor motion at 0.20 m/s.
- 4. Calibrate ground-truth 1.0 m translation and 360° rotation.
+2. With power fully off, restore factory wiring by swapping complete cables `M1 <-> M4` and `M2 <-> M3`.
+3. Repeat the no-command per-wheel hand test before rebuilding or accepting the provisional factory mapping.
+4. Repeat bounded forward, strafe, and rotation tests while lifted.
+5. Ensure battery is charged (> 12.0 V) before floor motion and ground-truth calibration.
 
 ## Verification Commands
 

@@ -53,7 +53,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
   - robot is on the floor,
   - one wheel is resisted or slipping,
   - `/cmd_vel` is stopped.
-- [ ] Decide whether real encoder-position odometry is possible from exposed data.
+- [x] Decide whether real encoder-position odometry is possible from exposed data; the four counters are now published as wheel joint positions and consumed by `base_node_X3`.
 
 ## Phase 3: Fix Immediate Physical Odometry Bugs
 
@@ -62,19 +62,25 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Initialize `last_vel_time_` correctly so the first `dt` is not invalid.
 - [x] Use node clock consistently instead of constructing a fresh `rclcpp::Clock`.
 - [x] Respect the declared `odom_frame` and `base_footprint_frame` parameters instead of hardcoding frame strings.
-- [ ] Add a velocity timeout/safe behavior if `vel_raw` stops.
-- [ ] Review covariance values. If odom is velocity-integrated and not encoder-position-derived, use covariance that reflects that uncertainty.
+- [x] Add joint-state and firmware-velocity timeouts; publish zero twist without integrating when both sources become stale.
+- [x] Make odometry covariance configurable for both pose and twist.
+- [ ] Tune covariance values from repeated ground-truth floor runs.
+- [x] Add a motor-command watchdog, command limits, repeated zero commands on shutdown, and a bounded `/cmd_vel` pulse tool.
+- [x] Reject encoder counter wrap/reset discontinuities and make wheel channel order/signs configurable.
+- [x] Diagnose the pre-rewire `x3-c` cable mapping by hand: `[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with observed signs `[+, +, +, -]`.
+- [ ] With motor power disconnected, restore Yahboom's factory layout by swapping complete cables `M1 <-> M4` and `M2 <-> M3`.
+- [ ] Repeat the hand test after rewiring and confirm expected `[FL, FR, BL, BR] = [m4, m2, m3, m1]` order and per-wheel signs.
 - [x] Rebuild `yahboomcar_base_node` and run the focused X3 odometry regression locally.
 - [ ] Verify `/odom_raw` twist and pose on the robot during forward, strafe, and rotate commands.
 
 ## Phase 4: Implement Correct Real Odometry If Hardware Allows
 
-- [ ] If wheel encoder positions are available, implement a real wheel-state odometry node for the physical robot.
-- [ ] Reuse the simulator math as the reference contract: four wheel deltas -> mecanum chassis delta -> `/odom`.
-- [ ] Publish or consume real `JointState` with four physical wheel joints and meaningful positions/velocities.
-- [ ] Decide whether the encoder odometry node should replace `base_node_X3` or live beside it as a new physical package.
-- [ ] Keep EKF ownership clear: either raw odom publishes `/odom_raw` and EKF publishes `/odom`, or a single odom source owns `odom -> base_footprint`.
-- [ ] If only chassis velocity feedback is available, rename/document it as firmware velocity odometry, not wheel encoder odometry.
+- [x] Implement wheel-state odometry for the physical robot in `base_node_X3`.
+- [x] Use four wheel deltas, mecanum chassis velocity, and midpoint pose integration as the physical raw-odometry path.
+- [x] Publish and consume `JointState` with four physical wheel joints and meaningful positions/velocities.
+- [x] Keep encoder odometry in `base_node_X3`, with `/vel_raw` retained only as a timed fallback.
+- [x] Keep EKF ownership clear: raw odom publishes `/odom_raw`; EKF publishes `/odom` and owns `odom -> base_footprint` in normal bringup.
+- [x] Continue publishing `/vel_raw` as explicitly documented firmware/controller velocity telemetry.
 
 ## Phase 5: Bring Physical And Sim Closer Together
 
@@ -100,7 +106,7 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [ ] Move autostart scripts from the guide into versioned files.
 - [ ] Decide whether to keep Docker-only deployment or add a cleaner host/systemd launch path.
 - [ ] Add startup checks for required devices before launching lidar/camera/driver nodes.
-- [ ] Add graceful shutdown behavior that sends zero velocity before stopping the driver stack.
+- [x] Add graceful driver shutdown behavior that sends repeated zero velocity commands before stopping.
 - [ ] Add log rotation notes for long-running robot use.
 
 ## Incident Notes
@@ -124,7 +130,6 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 
 ## Open Questions
 
-- Does the motor controller expose actual per-wheel encoder positions?
 - Is `Rosmaster_Lib.get_motion_data()` based on encoder feedback or just the requested chassis command?
+- What are the calibrated CPR, wheel radius, scale factors, and covariance values on the floor?
 - Do we want `physical_rosmaster` package names to stay as Yahboom names initially, or migrate gradually to `physical_rosmaster_*` names?
-- Should the initial GitHub repo be private until licensing is cleaned up?

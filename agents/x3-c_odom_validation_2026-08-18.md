@@ -31,7 +31,7 @@ source install/setup.bash
 The focused odometry test passed:
 
 ```text
-Summary: 8 tests, 0 errors, 0 failures, 0 skipped
+Summary: 7 tests, 0 errors, 0 failures, 0 skipped
 ```
 
 The rebuilt `base_node` correctly subscribed to `/joint_states`. The initial

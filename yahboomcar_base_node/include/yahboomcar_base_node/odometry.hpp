@@ -42,6 +42,16 @@ struct MecanumParams
   double ly;            // m (half track width y separation)
 };
 
+struct OdomCovariances
+{
+  double pose_x;
+  double pose_y;
+  double pose_yaw;
+  double twist_x;
+  double twist_y;
+  double twist_yaw;
+};
+
 inline BodyVelocity compute_mecanum_body_velocity(
   const WheelDisplacements & wheel_deltas,
   const MecanumParams & params,
@@ -54,11 +64,45 @@ inline BodyVelocity compute_mecanum_body_velocity(
   const double r = params.wheel_radius;
   const double k = (params.lx + params.ly > 0.0) ? (params.lx + params.ly) : 1.0;
 
-  const double vx = (r / 4.0) * (wheel_deltas.delta_fl + wheel_deltas.delta_fr + wheel_deltas.delta_bl + wheel_deltas.delta_br) / dt;
-  const double vy = (r / 4.0) * (-wheel_deltas.delta_fl + wheel_deltas.delta_fr + wheel_deltas.delta_bl - wheel_deltas.delta_br) / dt;
-  const double wz = (r / (4.0 * k)) * (-wheel_deltas.delta_fl + wheel_deltas.delta_fr - wheel_deltas.delta_bl + wheel_deltas.delta_br) / dt;
+  const double vx = (r / 4.0) *
+    (wheel_deltas.delta_fl + wheel_deltas.delta_fr + wheel_deltas.delta_bl +
+    wheel_deltas.delta_br) / dt;
+  const double vy = (r / 4.0) *
+    (-wheel_deltas.delta_fl + wheel_deltas.delta_fr + wheel_deltas.delta_bl -
+    wheel_deltas.delta_br) / dt;
+  const double wz = (r / (4.0 * k)) *
+    (-wheel_deltas.delta_fl + wheel_deltas.delta_fr - wheel_deltas.delta_bl +
+    wheel_deltas.delta_br) / dt;
 
   return BodyVelocity{vx, vy, wz};
+}
+
+inline BodyVelocity scale_body_velocity(
+  const BodyVelocity & velocity,
+  const double linear_scale_x,
+  const double linear_scale_y,
+  const double angular_scale)
+{
+  return BodyVelocity{
+    velocity.linear_x * linear_scale_x,
+    velocity.linear_y * linear_scale_y,
+    velocity.angular_z * angular_scale};
+}
+
+inline bool is_source_fresh(const double age, const double timeout)
+{
+  return std::isfinite(age) && std::isfinite(timeout) &&
+         age >= 0.0 && timeout > 0.0 && age <= timeout;
+}
+
+inline bool should_use_joint_states(
+  const bool use_joint_states,
+  const bool joint_data_received,
+  const double joint_data_age,
+  const double joint_state_timeout)
+{
+  return use_joint_states && joint_data_received &&
+         is_source_fresh(joint_data_age, joint_state_timeout);
 }
 
 inline OdomState integrate_velocity(
@@ -67,12 +111,13 @@ inline OdomState integrate_velocity(
   const double dt)
 {
   const double delta_heading = velocity.angular_z * dt;
+  const double midpoint_heading = state.heading + (delta_heading / 2.0);
   const double delta_x =
-    (velocity.linear_x * std::cos(state.heading) -
-    velocity.linear_y * std::sin(state.heading)) * dt;
+    (velocity.linear_x * std::cos(midpoint_heading) -
+    velocity.linear_y * std::sin(midpoint_heading)) * dt;
   const double delta_y =
-    (velocity.linear_x * std::sin(state.heading) +
-    velocity.linear_y * std::cos(state.heading)) * dt;
+    (velocity.linear_x * std::sin(midpoint_heading) +
+    velocity.linear_y * std::cos(midpoint_heading)) * dt;
 
   return OdomState{
     state.x + delta_x,
@@ -98,7 +143,9 @@ inline nav_msgs::msg::Odometry make_odometry_msg(
   const std::string & odom_frame,
   const std::string & base_footprint_frame,
   const OdomState & state,
-  const BodyVelocity & velocity)
+  const BodyVelocity & velocity,
+  const OdomCovariances & covariances =
+  OdomCovariances{0.001, 0.001, 0.001, 0.0001, 0.0001, 0.0001})
 {
   nav_msgs::msg::Odometry odom;
   odom.header.stamp = stamp;
@@ -110,9 +157,9 @@ inline nav_msgs::msg::Odometry make_odometry_msg(
   odom.pose.pose.position.z = 0.0;
   odom.pose.pose.orientation = yaw_to_quaternion(state.heading);
 
-  odom.pose.covariance[0] = 0.001;
-  odom.pose.covariance[7] = 0.001;
-  odom.pose.covariance[35] = 0.001;
+  odom.pose.covariance[0] = covariances.pose_x;
+  odom.pose.covariance[7] = covariances.pose_y;
+  odom.pose.covariance[35] = covariances.pose_yaw;
 
   odom.twist.twist.linear.x = velocity.linear_x;
   odom.twist.twist.linear.y = velocity.linear_y;
@@ -121,9 +168,9 @@ inline nav_msgs::msg::Odometry make_odometry_msg(
   odom.twist.twist.angular.y = 0.0;
   odom.twist.twist.angular.z = velocity.angular_z;
 
-  odom.twist.covariance[0] = 0.0001;
-  odom.twist.covariance[7] = 0.0001;
-  odom.twist.covariance[35] = 0.0001;
+  odom.twist.covariance[0] = covariances.twist_x;
+  odom.twist.covariance[7] = covariances.twist_y;
+  odom.twist.covariance[35] = covariances.twist_yaw;
 
   return odom;
 }

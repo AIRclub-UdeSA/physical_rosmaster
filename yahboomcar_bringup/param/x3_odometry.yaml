@@ -1,0 +1,21 @@
+base_node:
+  ros__parameters:
+    wheel_radius: 0.033
+    wheelbase_x: 0.160
+    wheelbase_y: 0.170
+    odom_frame: odom
+    base_footprint_frame: base_footprint
+    use_joint_states: true
+    joint_state_timeout: 0.5
+    velocity_timeout: 0.5
+    max_wheel_delta_rad: 20.0
+    linear_scale_x: 1.0
+    linear_scale_y: 1.0
+    angular_scale: 1.0
+    # Provisional values: replace after repeated ground-truth floor trials.
+    pose_covariance_x: 0.001
+    pose_covariance_y: 0.001
+    pose_covariance_yaw: 0.001
+    twist_covariance_x: 0.0001
+    twist_covariance_y: 0.0001
+    twist_covariance_yaw: 0.0001

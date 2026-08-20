@@ -2,15 +2,18 @@
 
 Date: 2026-08-11
 
-Goal: decide whether the physical robot can use encoder-delta mecanum odometry, matching the simulator contract, instead of relying only on firmware velocity integration.
+Goal: validate and calibrate the encoder-delta mecanum odometry now implemented on the physical X3, while retaining firmware velocity only as a timed fallback.
 
 ## Current Sources
 
 - `/cmd_vel`: commanded chassis velocity.
 - `/vel_raw`: chassis velocity returned by `Rosmaster_Lib.get_motion_data()` and published by `Mcnamu_driver_X3.py`.
-- `/odom_raw`: velocity integration from `yahboomcar_base_node`.
+- `/joint_states`: four wheel positions/velocities derived from `get_motor_encoder()` using configurable channel order, signs, and CPR.
+- `/odom_raw`: mecanum wheel-delta integration from `yahboomcar_base_node`, with midpoint heading integration.
 - `/odom`: EKF output after fusing `/odom_raw` and IMU.
-- `Rosmaster_Lib.get_motor_encoder()`: four motor encoder counters exposed by the public V3.3.9 library, not yet published by the X3 ROS driver.
+- `Rosmaster_Lib.get_motor_encoder()`: the four signed 32-bit counters underlying `/joint_states`.
+
+The driver has a `cmd_vel_timeout` watchdog and the base node rejects stale or discontinuous wheel input. Motion validation must use `tools/safe_cmd_vel_pulse.py`; do not use an unbounded publisher or rely on a later shell command to stop the robot.
 
 ## Stage 1: Confirm Installed Library
 
@@ -68,6 +71,20 @@ Observed while the robot was lifted and commanded through `/cmd_vel`:
 
 This is enough to confirm that the reported encoder counters move with commanded motion while lifted. The next step is to capture the exact sign convention and compare the ROS `/vel_raw` and `/odom_raw` topics against these same motions.
 
+### x3-c 2026-08-20 Wiring Diagnosis
+
+Synchronized forward hand rotations found the pre-rewire cable identities as
+`[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with observed signs
+`[+, +, +, -]`. That does not match Yahboom's factory X3 layout
+`[m4, m2, m3, m1]`. The planned powered-off correction is to swap the complete
+`M1 <-> M4` cables and the complete `M2 <-> M3` cables. Do not reverse a keyed
+plug or move individual pins.
+
+The post-rewire order and signs must be confirmed by another no-command hand
+test before powered validation. The source configuration carries the expected
+factory order `[3, 1, 2, 0]` and provisional all-positive signs. CPR also
+remains provisional because the hand rotations were not exact marked turns.
+
 ## Stage 3: Compare Command, Firmware Velocity, And Encoders
 
 Terminal A:
@@ -85,30 +102,22 @@ Terminal B:
 source /opt/ros/humble/setup.bash
 source /root/yahboomcar_ws/install/setup.bash
 ros2 bag record -o /tmp/x3_odom_probe \
-  /cmd_vel /vel_raw /odom_raw /odom /imu/data_raw /imu/data /tf
+  /cmd_vel /joint_states /vel_raw /odom_raw /odom \
+  /imu/data_raw /imu/data /voltage /edition /tf /diagnostics
 ```
 
-Terminal C:
-
-```bash
-cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/rosmaster_lib_probe.py --samples 300 --period 0.1
-```
+Do not run `rosmaster_lib_probe.py` while `driver_node` is active. Both
+processes would attempt to own the motor-controller serial device. On `x3-c`,
+use `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0` rather than an unstable
+`/dev/ttyUSB*` number. Use the probe only during the no-ROS per-wheel hand
+test.
 
 Motion commands, with wheels lifted first:
 
 ```bash
-ros2 topic pub -1 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.20, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
-sleep 2
-ros2 topic pub -1 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
-
-ros2 topic pub -1 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.20, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
-sleep 2
-ros2 topic pub -1 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
-
-ros2 topic pub -1 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.50}}"
-sleep 2
-ros2 topic pub -1 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
+python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5
+python3 tools/safe_cmd_vel_pulse.py --y 0.20 --duration 1.5
+python3 tools/safe_cmd_vel_pulse.py --yaw 0.50 --duration 1.5
 ```
 
 Repeat on the floor at low speed only after lifted tests behave correctly.
@@ -129,13 +138,13 @@ Good firmware velocity signal:
 - `/vel_raw.angular.z` is nonzero for rotate commands
 - `/vel_raw` changes when the robot is physically resisted if firmware speed is encoder-derived
 
-If encoders are stable, implement physical odometry from four wheel deltas and publish meaningful `/joint_states`.
+If encoders are stable, retain wheel-state odometry as the primary path and calibrate its parameters from repeated ground-truth runs.
 
-If encoders are unavailable or unreliable, keep firmware velocity odometry, document it as such, tune covariance honestly, and rely on IMU/LiDAR fusion for correction.
+If encoders become unavailable, verify that `/vel_raw` takes over only after the configured joint-state timeout. If both sources stop, `/odom_raw` must publish a zero twist once without integrating additional pose.
 
-## Stage 5: Data To Capture For Implementation
+## Stage 5: Data To Capture For Calibration
 
-Record these before coding encoder odometry:
+Record these before accepting encoder odometry:
 
 - wheel order: encoder motor 1, 2, 3, 4 to physical wheel name
 - sign convention for each wheel

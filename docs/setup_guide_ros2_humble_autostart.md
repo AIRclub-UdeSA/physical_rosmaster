@@ -272,8 +272,8 @@ Once inside that second shell, source the workspace and publish a test velocity 
 ```bash
 source /opt/ros/humble/setup.bash
 source /root/yahboomcar_ws/install/setup.bash
-ros2 topic pub -1 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.2, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
-ros2 topic pub -1 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5
 ```
 
 Camera:
@@ -350,8 +350,9 @@ echo "[$(date)] Starting ROSMASTER X3 bringup..." >> /tmp/ros_autostart.log
 nohup ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py >> /tmp/bringup.log 2>&1 &
 sleep 5
 
-nohup ros2 launch yahboomcar_description display_X3.launch.py >> /tmp/tfs_description.log 2>&1 &
-sleep 5
+# Do not launch display_X3.launch.py here. Core bringup already starts
+# robot_state_publisher, and the display launch would add a second robot-state
+# publisher plus a competing joint-state publisher.
 
 echo "[$(date)] Waiting for USB devices..." >> /tmp/ros_autostart.log
 sleep 10

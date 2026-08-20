@@ -57,15 +57,16 @@ Interpretation: real encoder-position odometry is probably possible if these cou
 
 - Subscribes to `cmd_vel`.
 - Calls `self.car.set_car_motion(vx, vy, angular)`.
-- Calls `self.car.get_motion_data()` in `pub_data()`.
+- Calls `self.car.get_motion_data()` in `publish_data()`.
 - Publishes those values to `vel_raw`.
-- Creates a `joint_states` publisher and a `JointState` object, but the current X3 driver does not publish wheel encoder positions from `get_motor_encoder()`.
+- Calls `get_motor_encoder()`, applies configurable channel order/signs and CPR, and publishes four wheel positions/velocities on `joint_states`.
+- Rejects implausible counter jumps and stops persistent motion through a configurable `/cmd_vel` watchdog.
 
 `yahboomcar_base_node/src/base_node_X3.cpp`:
 
-- Subscribes to `vel_raw`.
-- Integrates body-frame velocity into `/odom_raw`.
-- Does not currently consume wheel encoder position deltas.
+- Uses `joint_states` wheel-position deltas as the primary mecanum odometry source.
+- Uses `vel_raw` only as a timed fallback when joint states are unavailable.
+- Publishes raw wheel odometry on `/odom_raw`; the EKF owns filtered `/odom` and normal `odom -> base_footprint` TF.
 
 ## Robot-Side Confirmation Needed
 

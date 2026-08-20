@@ -1,0 +1,17 @@
+driver_node:
+  ros__parameters:
+    car_type: X3
+    imu_link: imu_link
+    Prefix: ""
+    serial_port: /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
+    xlinear_limit: 1.0
+    ylinear_limit: 1.0
+    angular_limit: 5.0
+    cmd_vel_timeout: 0.5
+    encoder_cpr: 1040.0
+    # Expected after restoring Yahboom's M4/M2/M3/M1 factory wheel wiring.
+    # Raw channels are zero-based m1..m4. Output is FL, FR, BL, BR.
+    # Re-run the per-wheel hand test before treating these as validated.
+    encoder_order: [3, 1, 2, 0]
+    encoder_signs: [1.0, 1.0, 1.0, 1.0]
+    encoder_max_delta_ticks: 5000

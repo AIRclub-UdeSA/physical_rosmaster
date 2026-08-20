@@ -116,15 +116,16 @@ The physical X3 odometry path calculates mecanum body velocities from wheel enco
 Current flow:
 
 - `yahboomcar_bringup/Mcnamu_driver_X3.py` subscribes to `/cmd_vel` and sends commands via `Rosmaster_Lib.Rosmaster.set_car_motion(...)`.
+- The driver clamps commands, stops after a configurable `cmd_vel_timeout`, and sends repeated zero commands during startup, timeout, and shutdown.
 - `Mcnamu_driver_X3.py` polls `Rosmaster_Lib.Rosmaster.get_motor_encoder()` and publishes four-wheel positions and angular velocities on `/joint_states`.
 - It also publishes `/vel_raw` from `Rosmaster_Lib.Rosmaster.get_motion_data()` for firmware speed telemetry.
-- `yahboomcar_base_node/src/base_node_X3.cpp` consumes `/joint_states`, evaluates 4-wheel mecanum kinematics, and integrates body velocities into `/odom_raw`.
+- `yahboomcar_base_node/src/base_node_X3.cpp` consumes `/joint_states`, rejects stale/discontinuous input, evaluates 4-wheel mecanum kinematics, and integrates body velocities into `/odom_raw` using midpoint heading.
 - `robot_localization` (EKF) fuses `/odom_raw` and `/imu/data`, publishing `/odom` and broadcasting `odom -> base_footprint`.
 
 Validation status & checklist:
 
 - Lifted tests verified encoder feedback and raw odometry calculation.
-- Sign calibration and floor deadband validation are documented in `agents/x3-c_validation_checklist.md`.
+- Per-wheel hand testing exposed a motor-cable permutation relative to Yahboom's factory X3 layout. Rewiring and post-rewire lifted validation remain documented in `agents/x3-c_validation_checklist.md`.
 
 Validation probe tools:
 
@@ -132,6 +133,12 @@ Validation probe tools:
 cd /root/yahboomcar_ws/src/physical_rosmaster
 python3 tools/rosmaster_lib_probe.py --hash-only
 python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
+```
+
+Run the sampling probe only when `driver_node` is stopped; both processes use the motor-controller serial port. Supervised motion tests must use the bounded pulse tool after confirming the robot is lifted or in a clear test area:
+
+```bash
+python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5
 ```
 
 See `agents/x3-c_validation_checklist.md` and `docs/odometry_validation.md` for the full test procedure.
