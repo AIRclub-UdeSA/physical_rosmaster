@@ -45,9 +45,10 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Search public V3.3.9 `Rosmaster_Lib` for encoder/tick APIs; `get_motor_encoder()` returns four cached signed 32-bit motor encoder counters.
 - [x] Record the public V3.3.9 serial packet fields used for motion and encoder feedback in `agents/rosmaster_lib_public_v3_3_9.md`.
 - [ ] Determine whether the firmware speed packet itself is encoder-derived, command-derived, IMU-assisted, or another controller estimate.
-- [x] Run a lifted hardware check showing the encoder counters and motion packet respond to `/cmd_vel` while:
+- [ ] Run a lifted hardware check showing the encoder counters and motion packet respond to `/cmd_vel` while:
   - robot is lifted,
   - `/cmd_vel` is stopped.
+  - The 2026-08-20 powered checks showed encoder and motion-packet response on the floor; they do not complete this lifted check.
 - [ ] Run the remaining hardware check comparing `/cmd_vel` and `vel_raw` while:
   - robot is lifted,
   - robot is on the floor,
@@ -70,9 +71,11 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Validate the `x3-c` packet-field mapping with direction-controlled hand tests: `[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with signs `[+, +, +, +]`.
 - [x] Visually verify the powered-off motor wiring against Yahboom's diagram; no cable move was required.
 - [x] Withdraw the proposed cable swaps: `Rosmaster_Lib`'s `m1..m4` names are packet positions, not evidence of PCB `M1..M4` port identity.
-- [x] Rebuild and deploy corrected `encoder_order: [0, 2, 1, 3]`, then repeat lifted forward, strafe, and rotate validation; all three wheel-sign patterns passed.
+- [x] Rebuild and deploy corrected `encoder_order: [0, 2, 1, 3]`; subsequent floor observations matched all three expected wheel-sign patterns.
+- [ ] Repeat forward, strafe, and rotate validation with the robot securely lifted.
 - [x] Rebuild `yahboomcar_base_node` and run the focused X3 odometry regression locally.
-- [x] Verify `/odom_raw` twist and pose on the lifted robot during forward, strafe, and rotate commands.
+- [x] Observe `/odom_raw` twist and pose during floor forward, strafe, and rotate commands; these observations are not ground-truth calibration.
+- [ ] Verify `/odom_raw` twist and pose during a true lifted repetition.
 - [ ] Resolve the large per-wheel magnitude imbalance and confirm `encoder_cpr` with exact marked rotations before ground-truth calibration.
 
 ## Phase 4: Implement Correct Real Odometry If Hardware Allows

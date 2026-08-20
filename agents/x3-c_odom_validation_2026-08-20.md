@@ -1,4 +1,4 @@
-# X3-C Safety and Lifted Odometry Validation Report - 2026-08-20
+# X3-C Safety and Floor Odometry Validation Report - 2026-08-20
 
 ## Scope
 
@@ -53,7 +53,9 @@ commands. It reported:
 - Controller edition after clean launch: `3.5`
 
 The battery failed the checklist's `> 12.0 V` floor-test gate. No motion
-command was issued.
+command was issued at this point. Powered floor pulses were performed later
+after the physical state was incorrectly recorded as lifted; the operator's
+later clarification supersedes that record.
 
 ## Clean stationary graph
 
@@ -101,12 +103,14 @@ A temporary stationary bag was saved outside Git at
 - `/tf`: `1054` messages
 - `/diagnostics`: `52` messages
 
-## Lifted motion follow-up
+## Floor motion follow-up (corrected classification)
 
-The operator subsequently confirmed that all four wheels were lifted and
-explicitly accepted proceeding despite the low battery. The clean core was
-relaunched, its idle graph was revalidated, and a new bag was recorded at
-`/tmp/x3_lifted_validation_2026-08-20`.
+At the time, the session record said that all four wheels were lifted and that
+the low battery was accepted for lifted testing. The operator later clarified
+that the robot was on the floor for all powered tests in this report. The clean
+core was relaunched, its idle graph was revalidated, and a new bag was recorded
+at `/tmp/x3_lifted_validation_2026-08-20`. The path retains its original,
+misleading name so the evidence remains locatable.
 
 The first two commands used the bounded pulse tool at 20 Hz, with redundant
 zeros before and after each command:
@@ -130,7 +134,7 @@ The sequence stopped at the sign gate, so no rotation command was issued.
 Wheel and firmware velocities returned to zero, a final explicit zero was
 published, and the core exited cleanly.
 
-The lifted bag contains `17934` messages over `176.902 s`. During both command
+The floor-test bag contains `17934` messages over `176.902 s`. During both command
 windows the battery sagged to `10.3 V`. The reusable analysis command is:
 
 ```bash
@@ -181,7 +185,7 @@ During the front-right capture, the USB serial device reset and changed from
 `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`; the driver configuration
 and probe now use that path.
 
-Reinterpreting the earlier powered pulses with the validated order and signs
+Reinterpreting the earlier floor pulses with the validated order and signs
 gives forward wheel deltas of approximately
 `[+1.1479, +4.6580, +1.3533, +1.7641] rad` and positive-Y deltas of
 `[-1.5527, +4.6459, +1.3775, -1.7218] rad`. Their signs match the expected
@@ -208,7 +212,7 @@ The repeat direct captures sent no motion commands. Firmware motion remained
 zero and battery voltage stayed between `10.3 V` and `10.4 V`. The probe then
 exited and released the controller serial port.
 
-## Corrected deployment and lifted sign validation
+## Corrected deployment and floor sign evidence
 
 The measured mapping was installed as:
 
@@ -230,7 +234,8 @@ publishers, exactly one driver subscriber, and one publisher each for
 `/joint_states`, `/odom_raw`, and `/odom`. Stationary wheel, firmware, and raw
 odom velocities were all zero.
 
-Recorded corrected trials were:
+Recorded corrected floor trials were below. Their evidence paths retain the
+original `lifted` labels, which are misleading after the operator's correction:
 
 | Command | Nonzero duration | Wheel delta `[FL, FR, BL, BR]` rad | Raw odom `[x, y, yaw]` | Evidence bag |
 | --- | ---: | --- | --- | --- |
@@ -240,10 +245,11 @@ Recorded corrected trials were:
 | `yaw=+0.30` | `0.757 s` | `[0, 0, 0, 0]` | `[0, 0, 0]` | `/tmp/x3_lifted_corrected_rotate_030_2026-08-20` |
 | `yaw=+0.50` | `0.757 s` | `[-0.1752, +0.4833, -0.0242, +0.2175]` | `[+0.0017, +0.0051, +0.0450]` | `/tmp/x3_lifted_corrected_rotate_050_2026-08-20` |
 
-The forward pattern `FL+ FR+ BL+ BR+`, strafe-left pattern
-`FL- FR+ BL+ BR-`, and CCW pattern `FL- FR+ BL- BR+` all passed. The `+0.12`
-and `+0.30 rad/s` yaw commands did not move the encoders; `+0.50 rad/s` was the
-first tested yaw command to break through. Wheel magnitudes were strongly
+The floor observations matched the forward pattern `FL+ FR+ BL+ BR+`,
+strafe-left pattern `FL- FR+ BL+ BR-`, and CCW pattern
+`FL- FR+ BL- BR+`. They do not complete the lifted sign gates. The `+0.12` and
+`+0.30 rad/s` yaw commands did not move the encoders on the floor; `+0.50 rad/s`
+was the first tested yaw command to break through the loaded drivetrain. Wheel magnitudes were strongly
 unequal in every moving trial, with a particularly weak back-left response in
 the rotation trial. This leaves CPR, controller/motor response, low-voltage
 behavior, and per-wheel mechanical variation as calibration work; it does not
@@ -259,17 +265,20 @@ that record is available.
 
 ## Result and blockers
 
-Deployment, stationary graph checks, and all three lifted wheel-sign gates
-passed. The direction-controlled hand test and powered trials validate packet
-order and polarity, and the wiring-fault diagnosis is withdrawn. Ground-truth
-odometry calibration is not accepted because CPR is provisional, wheel
-magnitudes are strongly imbalanced, and the battery was only `10.3-10.4 V`
-before motion. The operator explicitly accepted that voltage for lifted tests;
-the checklist floor-test gate remains unmet.
+Deployment and stationary graph checks passed. The direction-controlled hand
+test validates packet order and forward polarity; the floor trials independently
+match all three expected wheel-sign patterns, and the wiring-fault diagnosis is
+withdrawn. The lifted wheel-sign gates remain outstanding. Ground-truth odometry
+calibration is not accepted because CPR is provisional, wheel magnitudes are
+strongly imbalanced, there was no external motion measurement, and the battery
+was only `10.3-10.4 V` before motion. Because every powered test was on the
+floor, the checklist's floor-voltage gate was bypassed. No further floor motion
+should occur until the battery is above `12.0 V` and preflight is repeated.
 
 ## Safety state at end of session
 
-- Every nonzero command used the bounded safety tool and lasted `0.8 s`.
+- Every nonzero command used the bounded safety tool and lasted no more than
+  approximately `1.0 s`; all were performed with the robot on the floor.
 - Recorder setup required three forward pulses, one strafe pulse, two
   `yaw=+0.12` pulses, one `yaw=+0.30` pulse, and one `yaw=+0.50` pulse in the
   corrected session; incomplete bags are explicitly excluded above.
@@ -284,3 +293,5 @@ the checklist floor-test gate remains unmet.
   were outside this validation and may still be running.
 - The latest direct-probe battery readings were `10.3-10.4 V`. Robot power
   remains under operator control and was not independently switched off.
+- Contrary to the earlier session record, no true lifted powered validation was
+  performed. That validation remains a required future step.

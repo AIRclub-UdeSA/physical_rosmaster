@@ -1,4 +1,4 @@
-"""Focused tests for lifted-pulse ROS graph gating."""
+"""Focused tests for bounded-pulse ROS graph gating."""
 
 from types import SimpleNamespace
 

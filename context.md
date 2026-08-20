@@ -94,19 +94,20 @@ source install/setup.bash
  Hardware validation findings:
  
  - `get_motor_encoder()` returns four 32-bit signed counters.
- - Lifted motion tests verified that encoder counters increment and `/odom_raw` integrates properly during motion.
+- Floor pulse tests verified that encoder counters increment and `/odom_raw` integrates during motion, but they did not satisfy the lifted validation gate or provide ground-truth calibration.
  - The direction-controlled 2026-08-20 hand test validated raw packet-field order `[FL, FR, BL, BR] = [m1, m3, m2, m4]` with signs `[+, +, +, +]`.
  - The operator verified the powered-off cabling against Yahboom's diagram. `Rosmaster_Lib`'s `m1..m4` names are packet positions, not proven PCB motor-port labels, so no cable swap is required.
- - The rebuilt mapping passed lifted forward, strafe-left, and CCW wheel-sign gates. Wheel magnitudes remain strongly imbalanced, and yaw commands `0.12` and `0.30` did not move the encoders; `0.50` did.
+- With the rebuilt mapping, floor observations matched the forward, strafe-left, and CCW wheel-sign patterns. Wheel magnitudes remain strongly imbalanced, and floor yaw commands `0.12` and `0.30` did not move the encoders; `0.50` did. A true lifted repetition remains outstanding.
  - Earlier floor testing revealed a motor deadband at low speeds (0.10 m/s).
  - Standard recovery checklist is in `agents/x3-c_validation_checklist.md`.
  
  ## Immediate Robot-Side Work
  
 1. Follow `agents/x3-c_validation_checklist.md` for hardware recovery and validation.
-2. Measure exact encoder CPR with marked wheel rotations and investigate the per-wheel magnitude imbalance.
-3. Ensure battery is charged (> 12.0 V) before floor motion and ground-truth calibration.
-4. Run repeatable floor trials only after those gates pass.
+2. Repeat the forward, strafe, and rotation sign checks with the robot securely lifted.
+3. Measure exact encoder CPR with marked wheel rotations and investigate the per-wheel magnitude imbalance.
+4. Ensure battery is charged (> 12.0 V) before any further floor motion or ground-truth calibration.
+5. Run repeatable floor trials only after those gates pass.
 
 ## Verification Commands
 

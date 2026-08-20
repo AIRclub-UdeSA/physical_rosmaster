@@ -60,16 +60,18 @@ Observed on `x3-c` with the robot stationary:
 
 This confirms the controller is returning a stable stationary baseline, but it does not yet prove whether the encoder counters are sufficient for motion odometry.
 
-### x3-c Lifted Motion Probe Result
+### x3-c Floor Motion Probe Result
 
-Observed while the robot was lifted and commanded through `/cmd_vel`:
+The operator later clarified that the powered probe was performed with the
+robot on the floor, despite initially being recorded as lifted. Observed while
+commanded through `/cmd_vel`:
 
 - forward command produced increasing encoder counts and nonzero `motion_vx`, `motion_vy`, and `motion_vz`
 - strafe-left command produced clear encoder deltas on the four wheels and increasing `motion_vy`
 - rotate-ccw command produced strong, asymmetric encoder deltas across the four wheels and increasing `motion_vz`
 - battery stayed around `10.5` V during the short motion pulses
 
-This is enough to confirm that the reported encoder counters move with commanded motion while lifted. The next step is to capture the exact sign convention and compare the ROS `/vel_raw` and `/odom_raw` topics against these same motions.
+This confirms that the reported encoder counters move with commanded floor motion, but it does not satisfy the lifted validation gate or provide ground-truth calibration. The next step is to repeat the sign checks while securely lifted and compare the ROS `/vel_raw` and `/odom_raw` topics against those motions.
 
 ### x3-c 2026-08-20 Encoder Mapping
 
@@ -86,10 +88,11 @@ the installed `Rosmaster_Lib` only names four consecutive encoder packet fields
 motor-port labels. CPR remains provisional because the hand rotations were not
 exact marked turns.
 
-After rebuilding this mapping, bounded lifted tests passed the expected wheel
+After rebuilding this mapping, bounded floor tests matched the expected wheel
 sign patterns for forward, strafe-left, and CCW rotation. Wheel magnitudes were
-strongly unequal, `yaw=+0.12` and `+0.30 rad/s` did not move the encoders, and
-`yaw=+0.50 rad/s` did. Treat ordering/signs as validated, but do not treat CPR,
+strongly unequal, `yaw=+0.12` and `+0.30 rad/s` did not move the encoders on the
+floor, and `yaw=+0.50 rad/s` did. Treat ordering/signs as supported by the hand
+test and floor evidence, but repeat the powered lifted gate and do not treat CPR,
 distance scale, or per-wheel response as calibrated.
 
 ## Stage 3: Compare Command, Firmware Velocity, And Encoders

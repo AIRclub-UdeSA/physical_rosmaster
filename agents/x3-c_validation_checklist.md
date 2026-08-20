@@ -20,7 +20,7 @@ The driver also stops the controller when `/cmd_vel` is stale for 0.5 seconds. T
 - [ ] Battery is charged above 12.0 V before floor testing. Do not repeat the previous 10.1 V test.
 - [ ] Battery remains above the battery maker's safe lower limit under load.
 - [ ] Motor power switch is confirmed and reachable.
-- [x] Robot was confirmed securely lifted before the 2026-08-20 Phase 3 pulses.
+- [ ] Robot is confirmed securely lifted before any Phase 3 pulse. The operator later clarified that every 2026-08-20 powered pulse was performed on the floor.
 - [ ] A person supervises the robot and can cut motor power.
 - [x] Autostart actuator/core duplicates and competing `/cmd_vel` publishers are stopped for the current validation session. Camera and lidar processes may remain because they do not command motion.
 - [ ] Optional host fix: `/etc/hosts` contains `127.0.1.1 x3-c`.
@@ -68,7 +68,7 @@ Pass criteria:
 - [x] All 19 normal packages build.
 - [x] Focused C++ odometry tests pass.
 - [x] X3 driver safety/encoder helper tests pass.
-- [x] Lifted-pulse recorder gating tests pass.
+- [x] Bounded-pulse recorder gating tests pass.
 - [x] Installed `Rosmaster_Lib` matches public V3.3.9.
 - [x] `x3_driver.yaml` contains a positive `cmd_vel_timeout`.
 - [x] `use_joy` remains false by default.
@@ -166,9 +166,10 @@ Pass criteria before motion:
 
 Stationary evidence from 2026-08-20 is recorded in
 [`x3-c_odom_validation_2026-08-20.md`](x3-c_odom_validation_2026-08-20.md).
-Floor motion remains blocked until the battery is above 12.0 V. The operator
-explicitly accepted the low battery for the supervised lifted tests documented
-below.
+Floor motion remains blocked until the battery is above 12.0 V. The powered
+tests documented below were initially recorded as lifted, but the operator later
+clarified that all were on the floor. They therefore bypassed the floor-voltage
+gate and do not complete Phase 3.
 
 Start a new evidence bag; do not reuse the August 16 pre-encoder bag:
 
@@ -203,18 +204,19 @@ there is not exactly one actuator subscriber from `driver_node`. A passive
 
 Pass criteria:
 
-- [x] Forward sign gate: all normalized wheel deltas positive.
+- [ ] Forward sign gate: all normalized wheel deltas positive.
 - [ ] Forward ground-distance gate: odom `delta x > +0.10 m`; lateral/yaw leakage recorded.
-- [x] Strafe-left sign gate: `FL- FR+ BL+ BR-`.
+- [ ] Strafe-left sign gate: `FL- FR+ BL+ BR-`.
 - [ ] Strafe ground-distance gate: odom `delta y > +0.10 m`; forward/yaw leakage recorded.
-- [x] Rotate CCW: `FL- FR+ BL- BR+`; odom yaw delta positive; translation leakage recorded.
-- [x] `/vel_raw` and wheel velocities return near zero after each completed pulse.
-- [x] A zero command is observed after every completed pulse.
-- [x] No discontinuity, stale-input, duplicate-publisher, or TF-authority warning appears.
+- [ ] Rotate CCW: `FL- FR+ BL- BR+`; odom yaw delta positive; translation leakage recorded.
+- [ ] `/vel_raw` and wheel velocities return near zero after each completed lifted pulse.
+- [ ] A zero command is observed after every completed lifted pulse.
+- [ ] No discontinuity, stale-input, duplicate-publisher, or TF-authority warning appears during lifted pulses.
 
 Any incorrect sign stops the session. Correct order/sign parameters and repeat lifted validation before floor testing.
 
-Corrected 2026-08-20 lifted results, each using a recorded 0.757-second
+Floor observations from 2026-08-20 are retained below as useful sign evidence,
+but they are not a Phase 3 lifted pass. Each used a recorded 0.757-second
 nonzero command window:
 
 | Command | Wheel delta `[FL, FR, BL, BR]` rad | Raw odom `[x, y, yaw]` | Result |
@@ -223,11 +225,12 @@ nonzero command window:
 | `y=+0.12` | `[-0.5800, +0.8337, +0.2356, -0.1269]` | `[-0.0047, +0.0141, +0.0526]` | Sign pass; large magnitude/yaw bias |
 | `yaw=+0.50` | `[-0.1752, +0.4833, -0.0242, +0.2175]` | `[+0.0017, +0.0051, +0.0450]` | Sign and yaw pass; weak BL response |
 
-Recorded `yaw=+0.12` and `yaw=+0.30` trials did not move the wheel encoders;
-`+0.50` was the first tested yaw command to break through. The corrected
-mapping passes all three sign gates, but CPR, per-wheel magnitude imbalance,
-and low-voltage behavior remain unresolved. Do not use lifted odom distance as
-a ground-distance calibration.
+Recorded floor `yaw=+0.12` and `yaw=+0.30` trials did not move the wheel
+encoders; `+0.50` was the first tested yaw command to break through. The floor
+patterns match all three expected signs, but the lifted gates must be repeated.
+CPR, per-wheel magnitude imbalance, and low-voltage behavior remain unresolved.
+Do not use these floor odom deltas as distance calibration because no external
+ground truth was measured.
 
 ## Phase 4: Floor Breakaway and Repeatability
 
