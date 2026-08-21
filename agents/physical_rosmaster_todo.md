@@ -45,10 +45,10 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Search public V3.3.9 `Rosmaster_Lib` for encoder/tick APIs; `get_motor_encoder()` returns four cached signed 32-bit motor encoder counters.
 - [x] Record the public V3.3.9 serial packet fields used for motion and encoder feedback in `agents/rosmaster_lib_public_v3_3_9.md`.
 - [ ] Determine whether the firmware speed packet itself is encoder-derived, command-derived, IMU-assisted, or another controller estimate.
-- [ ] Run a lifted hardware check showing the encoder counters and motion packet respond to `/cmd_vel` while:
+- [x] Run a lifted hardware check showing the encoder counters and motion packet respond to `/cmd_vel` while:
   - robot is lifted,
   - `/cmd_vel` is stopped.
-  - The 2026-08-20 powered checks showed encoder and motion-packet response on the floor; they do not complete this lifted check.
+  - Completed 2026-08-21 with three recorded bounded pulses; encoder, firmware-motion, and raw-odom feedback responded and returned to zero.
 - [ ] Run the remaining hardware check comparing `/cmd_vel` and `vel_raw` while:
   - robot is lifted,
   - robot is on the floor,
@@ -67,17 +67,19 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - [x] Make odometry covariance configurable for both pose and twist.
 - [ ] Tune covariance values from repeated ground-truth floor runs.
 - [x] Add a motor-command watchdog, command limits, repeated zero commands on shutdown, and a bounded `/cmd_vel` pulse tool.
+- [ ] Add a configurable safe keyboard teleop. The installed standard teleop hardcodes initial values of `0.5 m/s` and `1.0 rad/s` and ignores speed parameters; the driver watchdog did stop sparse keyboard commands during the 2026-08-21 floor exploration.
 - [x] Reject encoder counter wrap/reset discontinuities and make wheel channel order/signs configurable.
 - [x] Validate the `x3-c` packet-field mapping with direction-controlled hand tests: `[FL, FR, BL, BR] = [m1, m3, m2, m4]`, with signs `[+, +, +, +]`.
 - [x] Visually verify the powered-off motor wiring against Yahboom's diagram; no cable move was required.
 - [x] Record the confirmed Yahboom PCB layout `[FL, FR, BL, BR] = [M4, M2, M3, M1]` separately from the empirical packet-field mapping.
 - [x] Withdraw the proposed cable swaps: `Rosmaster_Lib`'s `m1..m4` names are packet positions, not evidence of PCB `M1..M4` port identity.
 - [x] Rebuild and deploy corrected `encoder_order: [0, 2, 1, 3]`; subsequent floor observations matched all three expected wheel-sign patterns.
-- [ ] Repeat forward, strafe, and rotate validation with the robot securely lifted.
+- [x] Repeat forward, strafe, and rotate validation with the robot securely lifted; all sign and raw-odom integration gates passed on 2026-08-21.
 - [x] Rebuild `yahboomcar_base_node` and run the focused X3 odometry regression locally.
 - [x] Observe `/odom_raw` twist and pose during floor forward, strafe, and rotate commands; these observations are not ground-truth calibration.
-- [ ] Verify `/odom_raw` twist and pose during a true lifted repetition.
+- [x] Verify `/odom_raw` twist and pose during a true lifted repetition; see `agents/x3-c_lifted_odom_validation_2026-08-21.md`.
 - [ ] Resolve the large per-wheel magnitude imbalance and confirm `encoder_cpr` with exact marked rotations before ground-truth calibration.
+- [x] Record an initial charged-pack floor response: two bounded `x=+0.15 m/s` trials moved all wheels and integrated `/odom_raw`; the operator observed the three-second run as smooth, but no precise external distance was captured.
 
 ## Phase 4: Implement Correct Real Odometry If Hardware Allows
 

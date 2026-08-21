@@ -52,10 +52,13 @@ commands. It reported:
 - Battery voltage: `10.6-10.7 V`
 - Controller edition after clean launch: `3.5`
 
-The battery failed the checklist's `> 12.0 V` floor-test gate. No motion
-command was issued at this point. Powered floor pulses were performed later
-after the physical state was incorrectly recorded as lifted; the operator's
-later clarification supersedes that record.
+Under the checklist used during this session, the battery failed the then-current
+generic `> 12.0 V` floor-test gate. No motion command was issued at this point.
+Powered floor pulses were performed later after the physical state was
+incorrectly recorded as lifted; the operator's later clarification supersedes
+that record. On 2026-08-21 the generic threshold was itself superseded after the
+operator measured this fully charged pack at `11.7 V` while controller telemetry
+reported approximately `11.3 V`.
 
 ## Clean stationary graph
 
@@ -284,12 +287,17 @@ that record is available.
 Deployment and stationary graph checks passed. The direction-controlled hand
 test validates packet order and forward polarity; the floor trials independently
 match all three expected wheel-sign patterns, and the wiring-fault diagnosis is
-withdrawn. The lifted wheel-sign gates remain outstanding. Ground-truth odometry
+withdrawn. The lifted wheel-sign gates remained outstanding at the end of this
+2026-08-20 session. They were completed on 2026-08-21 and are documented in
+[`x3-c_lifted_odom_validation_2026-08-21.md`](x3-c_lifted_odom_validation_2026-08-21.md).
+Ground-truth odometry
 calibration is not accepted because CPR is provisional, wheel magnitudes are
 strongly imbalanced, there was no external motion measurement, and the battery
 was only `10.3-10.4 V` before motion. Because every powered test was on the
-floor, the checklist's floor-voltage gate was bypassed. No further floor motion
-should occur until the battery is above `12.0 V` and preflight is repeated.
+floor, the checklist's battery-verification gate was bypassed. Further floor
+motion requires a pack confirmed fully charged, paired multimeter/controller
+readings, and recorded under-load sag; it does not require the superseded
+generic `> 12.0 V` threshold.
 
 ## Safety state at end of session
 
@@ -310,4 +318,4 @@ should occur until the battery is above `12.0 V` and preflight is repeated.
 - The latest direct-probe battery readings were `10.3-10.4 V`. Robot power
   remains under operator control and was not independently switched off.
 - Contrary to the earlier session record, no true lifted powered validation was
-  performed. That validation remains a required future step.
+  performed on 2026-08-20. The required validation was completed on 2026-08-21.

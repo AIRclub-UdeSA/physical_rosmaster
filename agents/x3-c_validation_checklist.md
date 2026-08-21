@@ -17,10 +17,10 @@ The driver also stops the controller when `/cmd_vel` is stale for 0.5 seconds. T
 
 ## Phase 0: Physical Preflight
 
-- [ ] Battery is charged above 12.0 V before floor testing. Do not repeat the previous 10.1 V test.
+- [x] Battery is confirmed fully charged for the installed pack before floor testing. On 2026-08-21 the operator measured `11.7 V` at the pack with a multimeter while ROS/controller telemetry reported approximately `11.3 V`; do not apply the superseded generic `> 12.0 V` threshold.
 - [ ] Battery remains above the battery maker's safe lower limit under load.
 - [ ] Motor power switch is confirmed and reachable.
-- [ ] Robot is confirmed securely lifted before any Phase 3 pulse. The operator later clarified that every 2026-08-20 powered pulse was performed on the floor.
+- [x] Robot is confirmed securely lifted before any Phase 3 pulse. The operator confirmed the physical state before the 2026-08-21 pulses; every 2026-08-20 powered pulse remains classified as a floor test.
 - [ ] A person supervises the robot and can cut motor power.
 - [x] Autostart actuator/core duplicates and competing `/cmd_vel` publishers are stopped for the current validation session. Camera and lidar processes may remain because they do not command motion.
 - [ ] Optional host fix: `/etc/hosts` contains `127.0.1.1 x3-c`.
@@ -180,10 +180,14 @@ Pass criteria before motion:
 
 Stationary evidence from 2026-08-20 is recorded in
 [`x3-c_odom_validation_2026-08-20.md`](x3-c_odom_validation_2026-08-20.md).
-Floor motion remains blocked until the battery is above 12.0 V. The powered
-tests documented below were initially recorded as lifted, but the operator later
-clarified that all were on the floor. They therefore bypassed the floor-voltage
-gate and do not complete Phase 3.
+The completed true lifted repetition is recorded in
+[`x3-c_lifted_odom_validation_2026-08-21.md`](x3-c_lifted_odom_validation_2026-08-21.md).
+The powered 2026-08-20 tests documented below were initially recorded as
+lifted, but the operator later clarified that all were on the floor. The battery
+had not been verified fully charged for those trials, so they remain unsuitable
+for calibration and do not complete Phase 3. The earlier generic `> 12.0 V`
+threshold was superseded on 2026-08-21 by paired full-charge multimeter and
+controller readings plus under-load sag monitoring.
 
 Start a new evidence bag; do not reuse the August 16 pre-encoder bag:
 
@@ -221,16 +225,32 @@ there is not exactly one actuator subscriber from `driver_node`. A passive
 
 Pass criteria:
 
-- [ ] Forward sign gate: all normalized wheel deltas positive.
-- [ ] Forward integration gate: calculated odom `delta x` is positive; lateral/yaw leakage recorded. This is not a ground-distance measurement while lifted.
-- [ ] Strafe-left sign gate: `FL- FR+ BL+ BR-`.
-- [ ] Strafe integration gate: calculated odom `delta y` is positive; forward/yaw leakage recorded. This is not a ground-distance measurement while lifted.
-- [ ] Rotate CCW: `FL- FR+ BL- BR+`; odom yaw delta positive; translation leakage recorded.
-- [ ] `/vel_raw` and wheel velocities return near zero after each completed lifted pulse.
-- [ ] A zero command is observed after every completed lifted pulse.
-- [ ] No discontinuity, stale-input, duplicate-publisher, or TF-authority warning appears during lifted pulses.
+- [x] Forward sign gate: all normalized wheel deltas positive.
+- [x] Forward integration gate: calculated odom `delta x` is positive; lateral/yaw leakage recorded. This is not a ground-distance measurement while lifted.
+- [x] Strafe-left sign gate: `FL- FR+ BL+ BR-`.
+- [x] Strafe integration gate: calculated odom `delta y` is positive; forward/yaw leakage recorded. This is not a ground-distance measurement while lifted.
+- [x] Rotate CCW: `FL- FR+ BL- BR+`; odom yaw delta positive; translation leakage recorded.
+- [x] `/vel_raw` and wheel velocities return near zero after each completed lifted pulse.
+- [x] A zero command is observed after every completed lifted pulse.
+- [x] No discontinuity, stale-input, duplicate-publisher, or TF-authority warning appears during lifted pulses.
 
 Any incorrect sign stops the session. Correct order/sign parameters and repeat lifted validation before floor testing.
+
+True lifted results from 2026-08-21, using recorded nonzero command windows:
+
+| Command | Duration | Wheel delta `[FL, FR, BL, BR]` rad | Raw odom `[x, y, yaw]` | Result |
+| --- | ---: | --- | --- | --- |
+| `x=+0.20` | `1.464 s` | `[+7.3405, +9.4006, +7.9506, +7.9869]` | `[+0.2667, +0.0485, +0.1048]` | Sign and positive-X integration pass |
+| `y=+0.20` | `1.466 s` | `[-7.6123, +9.4369, +7.9627, -7.8056]` | `[-0.0340, +0.2689, +0.0640]` | Sign and positive-Y integration pass |
+| `yaw=+0.50` | `1.463 s` | `[-2.6281, +4.7426, -2.3864, +2.8335]` | `[+0.0178, +0.0228, +0.6295]` | Sign and positive-yaw integration pass |
+
+The evidence bag is `/tmp/x3_odom_validation_2026-08-21_lifted_r1`.
+Voltage was `11.3 V` idle and reached `10.9-11.0 V` during the lifted pulses.
+All velocities settled to zero, `/cmd_vel` had zero publishers after each
+pulse, the core shut down cleanly, and the controller serial port was released.
+One EKF update-rate overrun (`0.204 s`) occurred; no discontinuity, stale-input,
+duplicate-publisher, or TF-authority warning occurred. CPR, ground-distance
+scale, and per-wheel response remain uncalibrated.
 
 Floor observations from 2026-08-20 are retained below as useful sign evidence,
 but they are not a Phase 3 lifted pass. Each used a recorded 0.757-second
@@ -244,7 +264,8 @@ nonzero command window:
 
 Recorded floor `yaw=+0.12` and `yaw=+0.30` trials did not move the wheel
 encoders; `+0.50` was the first tested yaw command to break through. The floor
-patterns match all three expected signs, but the lifted gates must be repeated.
+patterns match all three expected signs; the lifted gates were later completed
+on 2026-08-21.
 CPR, per-wheel magnitude imbalance, and low-voltage behavior remain unresolved.
 Do not use these floor odom deltas as distance calibration because no external
 ground truth was measured.
@@ -263,10 +284,25 @@ python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.0 --require-recorder
 python3 tools/safe_cmd_vel_pulse.py --x 0.25 --duration 1.0 --require-recorder
 ```
 
-- [ ] Record the lowest repeatable breakaway speed; do not label one failed speed as deadband without repetitions.
-- [ ] Record voltage before, during, and after motion.
-- [ ] Verify physical motion, `/joint_states`, `/vel_raw`, and `/odom_raw` agree.
+Charged-pack observations from 2026-08-21:
+
+| Command | Duration | Wheel delta `[FL, FR, BL, BR]` rad | Raw odom `[x, y, yaw]` | Voltage | Physical observation |
+| --- | ---: | --- | --- | --- | --- |
+| `x=+0.15` | `0.962 s` | `[+2.2535, +3.2866, +2.3381, +3.0208]` | `[+0.0895, +0.0093, +0.0858]` | `11.0-11.2 V` | Not seen clearly by operator |
+| `x=+0.15` | `2.978 s` | `[+13.8653, +14.9709, +14.1492, +14.5238]` | `[+0.4677, +0.0806, +0.0740]` | `11.2 V` | Visually smooth; actual distance not measured precisely |
+
+- [ ] Record the lowest repeatable breakaway speed; `0.15 m/s` moved repeatably, but lower speeds were not tested with this fully charged pack.
+- [x] Record voltage before, during, and after motion.
+- [x] Verify physical motion, `/joint_states`, `/vel_raw`, and `/odom_raw` agree qualitatively; precise scale remains unverified.
 - [ ] Repeat forward, reverse, left, right, CW, and CCW trials to expose directional bias.
+
+The same bag contains 29 later standard-keyboard command windows. The installed
+teleop started at its hardcoded defaults (`0.5 m/s`, `1.0 rad/s`) rather than the
+intended reduced values. It exercised forward, reverse, lateral, diagonal, and
+CCW commands, and the driver watchdog stopped sparse inputs 11 times. Preserve
+that data as qualitative stress/directional evidence only: maneuver annotations,
+precise physical distances/headings, a CW rotation, and continuous-yaw analysis
+are insufficient for calibration.
 
 ## Phase 5: Ground-Truth Calibration
 
@@ -297,8 +333,8 @@ Acceptance target after calibration:
 
 ## Phase 6: Sign-Off
 
-- [ ] Save bag metadata, Git revision, parameters, battery state, floor type, and measurements in `agents/x3-c_odom_validation_<DATE>.md`.
-- [ ] Store large bags outside Git; do not treat `robot_artifacts/x3_lifted_probe` as current evidence.
+- [x] Save bag metadata, Git revision, parameters, battery state, floor type, and available measurements in dated validation reports. The exact floor type and precise external measurements remain unrecorded and are explicitly called out.
+- [x] Store large bags outside Git; current evidence paths and SHA-256 hashes are recorded in the 2026-08-21 reports. Do not treat `robot_artifacts/x3_lifted_probe` as current evidence.
 - [ ] Review covariance and EKF behavior using the completed trials.
 - [ ] Validate LiDAR/camera device names and headless autostart only after core motion and odometry pass.
 - [ ] Tag a known-working physical snapshot only after the full sign-off.

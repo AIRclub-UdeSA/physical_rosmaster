@@ -71,7 +71,7 @@ commanded through `/cmd_vel`:
 - rotate-ccw command produced strong, asymmetric encoder deltas across the four wheels and increasing `motion_vz`
 - battery stayed around `10.5` V during the short motion pulses
 
-This confirms that the reported encoder counters move with commanded floor motion, but it does not satisfy the lifted validation gate or provide ground-truth calibration. The next step is to repeat the sign checks while securely lifted and compare the ROS `/vel_raw` and `/odom_raw` topics against those motions.
+This confirms that the reported encoder counters move with commanded floor motion, but it did not satisfy the lifted validation gate or provide ground-truth calibration. The lifted gate was subsequently completed on 2026-08-21 as described below.
 
 ### x3-c 2026-08-20 Encoder Mapping
 
@@ -97,9 +97,44 @@ exact marked turns.
 After rebuilding this mapping, bounded floor tests matched the expected wheel
 sign patterns for forward, strafe-left, and CCW rotation. Wheel magnitudes were
 strongly unequal, `yaw=+0.12` and `+0.30 rad/s` did not move the encoders on the
-floor, and `yaw=+0.50 rad/s` did. Treat ordering/signs as supported by the hand
-test and floor evidence, but repeat the powered lifted gate and do not treat CPR,
-distance scale, or per-wheel response as calibrated.
+floor, and `yaw=+0.50 rad/s` did.
+
+### x3-c 2026-08-21 Lifted Validation
+
+With the robot explicitly confirmed lifted, recorded 1.5-second bounded pulses
+passed the expected wheel patterns and positive raw-odom integration:
+
+- forward: wheels `[+7.3405, +9.4006, +7.9506, +7.9869] rad`, odom
+  `[+0.2667, +0.0485, +0.1048]`
+- strafe left: wheels `[-7.6123, +9.4369, +7.9627, -7.8056] rad`, odom
+  `[-0.0340, +0.2689, +0.0640]`
+- rotate CCW: wheels `[-2.6281, +4.7426, -2.3864, +2.8335] rad`, odom
+  `[+0.0178, +0.0228, +0.6295]`
+
+All reported velocities returned to zero after every pulse. Treat ordering,
+signs, and the wheel-state integration path as validated, but do not treat CPR,
+distance scale, leakage, or per-wheel response as calibrated without marked
+wheel rotations and externally measured floor trials.
+
+### x3-c 2026-08-21 Charged-Pack Floor Response
+
+The operator measured the fully charged pack at `11.7 V` with a multimeter;
+controller telemetry read `11.2-11.3 V` at idle. This supersedes the earlier
+generic `> 12.0 V` floor gate. Battery preflight now records paired readings and
+under-load sag.
+
+Two recorded `x=+0.15 m/s` trials lasted `0.962 s` and `2.978 s`. The longer
+trial produced wheel deltas `[+13.8653, +14.9709, +14.1492, +14.5238] rad` and
+raw-odom delta `[+0.4677, +0.0806, +0.0740]`; controller voltage stayed at
+`11.2 V`. The operator described the movement as visually smooth, but no precise
+external distance or heading measurement was accepted. This validates
+repeatable floor response, not odometry scale.
+
+The same bag contains a later unmeasured standard-keyboard exploration at the
+package's hardcoded `0.5 m/s` and `1.0 rad/s` defaults. Treat those windows as
+qualitative stress/directional evidence only. See
+`agents/x3-c_floor_odom_validation_2026-08-21.md` for the evidence boundary,
+bag metadata, checksums, and final safety state.
 
 ## Stage 3: Compare Command, Firmware Velocity, And Encoders
 

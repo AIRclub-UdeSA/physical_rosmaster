@@ -107,17 +107,19 @@ Hardware validation findings:
 - Floor pulse tests verified that encoder counters increment and `/odom_raw` integrates during motion, but they did not satisfy the lifted validation gate or provide ground-truth calibration.
 - The direction-controlled 2026-08-20 hand test validated raw packet-field order `[FL, FR, BL, BR] = [m1, m3, m2, m4]` with signs `[+, +, +, +]`.
 - The operator confirmed Yahboom's powered-off PCB port layout: `[FL, FR, BL, BR] = [M4, M2, M3, M1]`. Combined with the hand test, the empirical packet-to-port relationship is `[m1, m2, m3, m4] = [M4, M3, M2, M1]`. No cable swap is required.
-- With the rebuilt mapping, floor observations matched the forward, strafe-left, and CCW wheel-sign patterns. Wheel magnitudes remain strongly imbalanced, and floor yaw commands `0.12` and `0.30` did not move the encoders; `0.50` did. A true lifted repetition remains outstanding.
+- With the rebuilt mapping, floor observations matched the forward, strafe-left, and CCW wheel-sign patterns. Wheel magnitudes remained imbalanced, and floor yaw commands `0.12` and `0.30` did not move the encoders; `0.50` did.
+- The true lifted repetition on 2026-08-21 passed all three wheel-sign gates and produced positive `/odom_raw` integration on each commanded axis. See `agents/x3-c_lifted_odom_validation_2026-08-21.md`.
+- The charged-pack floor follow-up on 2026-08-21 recorded two bounded `x=+0.15 m/s` trials plus a qualitative keyboard exploration. The three-second bounded trial integrated about `0.475 m` and was visually smooth, but the physical distance was not measured precisely. See `agents/x3-c_floor_odom_validation_2026-08-21.md`.
 - Earlier floor testing revealed a motor deadband at low speeds (0.10 m/s).
 - Standard recovery checklist is in `agents/x3-c_validation_checklist.md`.
 
 ## Immediate Robot-Side Work
  
 1. Follow `agents/x3-c_validation_checklist.md` for hardware recovery and validation.
-2. Repeat the forward, strafe, and rotation sign checks with the robot securely lifted.
-3. Measure exact encoder CPR with marked wheel rotations and investigate the per-wheel magnitude imbalance.
-4. Ensure battery is charged (> 12.0 V) before any further floor motion or ground-truth calibration.
-5. Run repeatable floor trials only after those gates pass.
+2. Measure exact encoder CPR with marked wheel rotations and investigate the per-wheel magnitude/leakage bias.
+3. Before floor motion, confirm the installed pack is fully charged, record both a terminal multimeter reading and the controller-reported voltage, and monitor sag during every trial. Do not apply a generic `> 12.0 V` threshold to this pack.
+4. Run repeatable, externally measured floor trials to calibrate distance, yaw, and covariance.
+5. Replace or wrap the installed keyboard teleop so its initial linear/angular speeds are explicitly bounded rather than hardcoded to `0.5 m/s` and `1.0 rad/s`.
 
 ## Verification Commands
 

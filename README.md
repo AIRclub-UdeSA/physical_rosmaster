@@ -124,9 +124,10 @@ Current flow:
 
 Validation status & checklist:
 
-- Floor pulse tests verified that encoder feedback changes and raw odometry calculates from it, but they were run without external ground truth and do not satisfy the lifted validation gate.
+- The earlier floor pulse tests verified that encoder feedback changes and raw odometry calculates from it, but they had no external ground truth and did not satisfy the lifted validation gate.
 - Direction-controlled per-wheel hand testing validated raw packet-field order `[m1, m3, m2, m4] = [FL, FR, BL, BR]`, with forward-positive signs on all four wheels. The operator also confirmed Yahboom's physical port layout: `[FL, FR, BL, BR] = [M4, M2, M3, M1]`. Packet fields and printed PCB motor-port labels are distinct, so the earlier wiring-fault conclusion and proposed cable swaps were withdrawn.
-- With the rebuilt mapping, floor observations matched the expected forward, strafe-left, and CCW wheel-sign patterns. A true lifted repetition remains outstanding; significant per-wheel magnitude/yaw bias and provisional CPR are documented in `agents/x3-c_validation_checklist.md`.
+- The true lifted repetition on 2026-08-21 passed the forward, strafe-left, and CCW wheel-sign and raw-odometry integration gates. Per-wheel magnitude/leakage bias and provisional CPR remain documented in `agents/x3-c_validation_checklist.md`.
+- The 2026-08-21 charged-pack floor follow-up confirmed repeatable motion and encoder/odom response at `0.15 m/s`; the operator described the three-second run as visually smooth. No precise external distance or heading measurement was captured, so scale and covariance calibration remain outstanding.
 
 Validation probe tools:
 
