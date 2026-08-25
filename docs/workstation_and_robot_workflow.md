@@ -99,6 +99,9 @@ The launch arguments can override these environment variables for a single run.
 
 ## Manual validation order
 
+Use [robot_side_verification_todo.md](robot_side_verification_todo.md) as the
+authoritative, evidence-backed checklist for the first robot acceptance run.
+
 Start the platform manually:
 
 ```bash
