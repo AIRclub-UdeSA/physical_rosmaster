@@ -146,3 +146,6 @@ course tests against `/odom_raw` and `/odom`.
 - `/vel_raw` was zero.
 - Joint velocities were zero.
 - No repository source files were modified during validation.
+# Historical validation evidence
+
+> This report describes the former `/odom_raw` + EKF graph and is retained only as dated robot evidence.

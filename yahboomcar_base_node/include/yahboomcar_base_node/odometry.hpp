@@ -1,3 +1,17 @@
+// Copyright 2026 AIRclub UdeSA
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #ifndef YAHBOOMCAR_BASE_NODE__ODOMETRY_HPP_
 #define YAHBOOMCAR_BASE_NODE__ODOMETRY_HPP_
 
@@ -95,16 +109,6 @@ inline bool is_source_fresh(const double age, const double timeout)
          age >= 0.0 && timeout > 0.0 && age <= timeout;
 }
 
-inline bool should_use_joint_states(
-  const bool use_joint_states,
-  const bool joint_data_received,
-  const double joint_data_age,
-  const double joint_state_timeout)
-{
-  return use_joint_states && joint_data_received &&
-         is_source_fresh(joint_data_age, joint_state_timeout);
-}
-
 inline OdomState integrate_velocity(
   const OdomState & state,
   const BodyVelocity & velocity,
@@ -122,7 +126,9 @@ inline OdomState integrate_velocity(
   return OdomState{
     state.x + delta_x,
     state.y + delta_y,
-    state.heading + delta_heading};
+    std::atan2(
+      std::sin(state.heading + delta_heading),
+      std::cos(state.heading + delta_heading))};
 }
 
 inline geometry_msgs::msg::Quaternion yaw_to_quaternion(const double heading)

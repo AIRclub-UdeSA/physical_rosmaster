@@ -338,3 +338,6 @@ Acceptance target after calibration:
 - [ ] Review covariance and EKF behavior using the completed trials.
 - [ ] Validate LiDAR/camera device names and headless autostart only after core motion and odometry pass.
 - [ ] Tag a known-working physical snapshot only after the full sign-off.
+# Historical validation checklist
+
+> This checklist was completed against the pre-cleanup `/odom_raw` + EKF platform. It is evidence, not the current rollout procedure. Use `tools/physical_contract_probe.py` and current `docs/` for new validation.

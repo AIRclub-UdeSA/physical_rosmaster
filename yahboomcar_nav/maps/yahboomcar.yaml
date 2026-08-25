@@ -1,7 +1,0 @@
-image: /root/yahboomcar_ros2_ws/yahboomcar_lucio_ws/src/yahboomcar_nav/maps/yahboomcar.pgm
-mode: trinary
-resolution: 0.05
-origin: [-2.3, -8.95, 0]
-negate: 0
-occupied_thresh: 0.65
-free_thresh: 0.25

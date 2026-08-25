@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+# Copyright 2026 AIRclub UdeSA
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """ROS 2 hardware driver for the Yahboom ROSMASTER X3 base."""
 
 from __future__ import annotations
@@ -7,6 +21,7 @@ import math
 from typing import Optional
 
 import rclpy
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState, MagneticField
@@ -39,6 +54,7 @@ class YahboomCarDriver(Node):
         self.declare_parameter("encoder_order", [0, 2, 1, 3])
         self.declare_parameter("encoder_signs", [1.0, 1.0, 1.0, 1.0])
         self.declare_parameter("encoder_max_delta_ticks", 5000)
+        self.declare_parameter("max_consecutive_read_failures", 10)
 
         self.car_type = str(self.get_parameter("car_type").value)
         self.imu_link = str(self.get_parameter("imu_link").value)
@@ -56,6 +72,9 @@ class YahboomCarDriver(Node):
         self.encoder_max_delta_ticks = int(
             self.get_parameter("encoder_max_delta_ticks").value
         )
+        self.max_consecutive_read_failures = int(
+            self.get_parameter("max_consecutive_read_failures").value
+        )
 
         if self.encoder_cpr <= 0.0:
             raise ValueError("encoder_cpr must be positive")
@@ -63,11 +82,9 @@ class YahboomCarDriver(Node):
             raise ValueError("encoder_max_delta_ticks must be positive")
         if self.cmd_vel_timeout <= 0.0:
             raise ValueError("cmd_vel_timeout must be positive")
+        if self.max_consecutive_read_failures <= 0:
+            raise ValueError("max_consecutive_read_failures must be positive")
         validate_encoder_config(self.encoder_order, self.encoder_signs)
-
-        self.car = Rosmaster(com=self.serial_port)
-        self.car.set_car_type(1)
-        self.car.create_receive_threading()
 
         self.create_subscription(Twist, "cmd_vel", self.cmd_vel_callback, 1)
         self.create_subscription(
@@ -85,11 +102,21 @@ class YahboomCarDriver(Node):
         self.magnetic_field_publisher = self.create_publisher(
             MagneticField, "/imu/mag", 100
         )
+        self.diagnostic_publisher = self.create_publisher(
+            DiagnosticArray, "/diagnostics", 10
+        )
+
+        self.car = Rosmaster(com=self.serial_port)
+        self.car.set_car_type(1)
+        self.car.create_receive_threading()
 
         self.previous_encoders: Optional[tuple[int, int, int, int]] = None
         self.previous_encoder_time = None
         self.joint_positions = [0.0, 0.0, 0.0, 0.0]
         self.encoder_fault_active = False
+        self.encoder_failure_count = 0
+        self.telemetry_failure_count = 0
+        self.last_complete_telemetry_time = None
 
         self.motion_safety = MotionSafetyController(
             self.set_motion,
@@ -104,6 +131,7 @@ class YahboomCarDriver(Node):
         self.watchdog_timer = self.create_timer(
             0.05, self.check_cmd_vel_watchdog
         )
+        self.health_timer = self.create_timer(1.0, self.publish_health)
 
         self.get_logger().info(
             "X3 driver ready: serial_port=%s, cmd_vel_timeout=%.3fs, "
@@ -114,6 +142,56 @@ class YahboomCarDriver(Node):
                 self.encoder_order,
                 self.encoder_signs,
             )
+        )
+
+    def publish_diagnostic(self, level: int, message: str) -> None:
+        """Publish standard motor, encoder, and IMU hardware health."""
+        diagnostic = DiagnosticArray()
+        diagnostic.header.stamp = self.get_clock().now().to_msg()
+        status = DiagnosticStatus()
+        status.level = level
+        status.name = "yahboomcar_bringup: motor controller and onboard sensors"
+        status.message = message
+        status.hardware_id = self.serial_port
+        status.values = [
+            KeyValue(
+                key="encoder_consecutive_failures",
+                value=str(self.encoder_failure_count),
+            ),
+            KeyValue(
+                key="telemetry_consecutive_failures",
+                value=str(self.telemetry_failure_count),
+            ),
+        ]
+        diagnostic.status = [status]
+        self.diagnostic_publisher.publish(diagnostic)
+
+    def publish_health(self) -> None:
+        """Report liveness even when the health state has not changed."""
+        if self.encoder_failure_count or self.telemetry_failure_count:
+            self.publish_diagnostic(
+                DiagnosticStatus.ERROR,
+                "Motor controller feedback has read failures",
+            )
+            return
+        if self.last_complete_telemetry_time is None:
+            self.publish_diagnostic(
+                DiagnosticStatus.WARN,
+                "Waiting for the first complete hardware telemetry sample",
+            )
+            return
+        age = (
+            self.get_clock().now() - self.last_complete_telemetry_time
+        ).nanoseconds / 1e9
+        if not math.isfinite(age) or age > 0.5:
+            self.publish_diagnostic(
+                DiagnosticStatus.ERROR,
+                "Complete hardware telemetry is stale",
+            )
+            return
+        self.publish_diagnostic(
+            DiagnosticStatus.OK,
+            "Motor controller, encoders, and onboard sensors healthy",
         )
 
     def set_motion(self, vx: float, vy: float, wz: float) -> None:
@@ -159,10 +237,10 @@ class YahboomCarDriver(Node):
         state.header.stamp = now.to_msg()
         state.header.frame_id = "joint_states"
         base_names = [
-            "front_left_joint",
-            "front_right_joint",
-            "back_left_joint",
-            "back_right_joint",
+            "front_left_wheel_joint",
+            "front_right_wheel_joint",
+            "back_left_wheel_joint",
+            "back_right_wheel_joint",
         ]
         state.name = [self.prefix + name for name in base_names]
 
@@ -172,14 +250,29 @@ class YahboomCarDriver(Node):
                 raw_encoders, self.encoder_order, self.encoder_signs
             )
         except Exception as exc:
+            self.encoder_failure_count += 1
+            self.publish_diagnostic(
+                DiagnosticStatus.ERROR,
+                "Wheel encoder read failed: %s" % exc,
+            )
             if not self.encoder_fault_active:
                 self.get_logger().error("Encoder read failed: %s" % exc)
                 self.encoder_fault_active = True
+            if self.encoder_failure_count >= self.max_consecutive_read_failures:
+                raise RuntimeError(
+                    "Required motor encoder hardware is unavailable after %d reads"
+                    % self.encoder_failure_count
+                ) from exc
             return None
 
         if self.encoder_fault_active:
             self.get_logger().info("Encoder feedback recovered")
             self.encoder_fault_active = False
+            self.publish_diagnostic(
+                DiagnosticStatus.OK,
+                "Wheel encoder feedback recovered",
+            )
+        self.encoder_failure_count = 0
 
         velocities = [0.0, 0.0, 0.0, 0.0]
         if (
@@ -225,10 +318,50 @@ class YahboomCarDriver(Node):
             mx, my, mz = self.car.get_magnetometer_data()
             vx, vy, angular = self.car.get_motion_data()
         except Exception as exc:
-            self.get_logger().error(
-                "Controller telemetry read failed: %s" % exc
+            self.telemetry_failure_count += 1
+            self.publish_diagnostic(
+                DiagnosticStatus.ERROR,
+                "Controller/IMU telemetry read failed: %s" % exc,
             )
+            self.get_logger().error(
+                "Controller telemetry read failed (%d/%d): %s"
+                % (
+                    self.telemetry_failure_count,
+                    self.max_consecutive_read_failures,
+                    exc,
+                )
+            )
+            if self.telemetry_failure_count >= self.max_consecutive_read_failures:
+                raise RuntimeError(
+                    "Required motor/IMU hardware is unavailable after %d reads"
+                    % self.telemetry_failure_count
+                ) from exc
             return
+        self.telemetry_failure_count = 0
+
+        telemetry = (
+            edition.data,
+            battery.data,
+            ax,
+            ay,
+            az,
+            gx,
+            gy,
+            gz,
+            mx,
+            my,
+            mz,
+            vx,
+            vy,
+            angular,
+        )
+        if not all(math.isfinite(float(value)) for value in telemetry):
+            self.publish_diagnostic(
+                DiagnosticStatus.ERROR,
+                "Controller/IMU telemetry contains non-finite data",
+            )
+            raise RuntimeError("Required motor/IMU telemetry contains non-finite data")
+        self.last_complete_telemetry_time = now
 
         imu = Imu()
         imu.header.stamp = now.to_msg()

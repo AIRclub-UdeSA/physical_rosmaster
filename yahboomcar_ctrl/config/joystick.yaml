@@ -1,0 +1,20 @@
+x3_joy_teleop:
+  ros__parameters:
+    joy_topic: /joy
+    cmd_vel_topic: /cmd_vel
+    x_axis: 1
+    y_axis: 0
+    yaw_axis: 2
+    x_sign: 1.0
+    y_sign: 1.0
+    yaw_sign: 1.0
+    deadman_button: 4
+    gear_up_button: 5
+    gear_down_button: 6
+    buzzer_button: 1
+    rgb_button: 3
+    deadzone: 0.15
+    max_linear_speed: 0.20
+    max_angular_speed: 1.0
+    input_timeout: 0.30
+    gear_scales: [0.25, 0.5, 1.0]

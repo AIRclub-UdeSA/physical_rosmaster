@@ -1,5 +1,7 @@
 # Troubleshooting
 
+The dated incidents preserve pre-cleanup history. Mentions of removed SLAM packages, `/odom_raw`, EKF, old device paths, or the old autostart graph are not current platform instructions.
+
 This directory records failures seen on physical ROSMASTER robots and the quickest way to distinguish them from similar problems.
 
 Use the happy-path setup guide for normal installation and bringup. Use these pages when a robot is already failing and you need diagnosis, recovery, and verification steps.

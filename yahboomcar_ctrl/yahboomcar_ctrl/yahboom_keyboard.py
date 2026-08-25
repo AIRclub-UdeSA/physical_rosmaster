@@ -1,134 +1,159 @@
-#!/usr/bin/env python
-# encoding: utf-8
-#import public lib
-from geometry_msgs.msg import Twist
-import sys, select, termios, tty
+#!/usr/bin/env python3
+# Copyright 2026 AIRclub UdeSA
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-#import ros lib
+"""Bounded keyboard teleoperation with release timeout and shutdown stop."""
+
+from __future__ import annotations
+
+import select
+import sys
+import termios
+import time
+import tty
+
 import rclpy
-from rclpy.node import Node
 from geometry_msgs.msg import Twist
+from rclpy.node import Node
 
-msg = """
-Control Your SLAM-Bot!
----------------------------
-Moving around:
-   u    i    o
-   j    k    l
-   m    ,    .
 
-q/z : increase/decrease max speeds by 10%
-w/x : increase/decrease only linear speed by 10%
-e/c : increase/decrease only angular speed by 10%
-t/T : x and y speed switch
-s/S : stop keyboard control
-space key, k : force stop
-anything else : stop smoothly
+HELP = """
+ROSMASTER X3 keyboard control (run explicitly)
 
-CTRL-C to quit
+   u    i    o        i/, forward/back
+   j    k    l        j/l strafe left/right
+   m    ,    .        u/o/m/. combine translation and rotation
+
+q/z all speeds +/-10%; w/x linear; e/c angular
+space or k stops; Ctrl-C exits. Commands stop automatically on key timeout.
 """
 
-moveBindings = {
-    'i': (1, 0),
-    'o': (1, -1),
-    'j': (0, 1),
-    'l': (0, -1),
-    'u': (1, 1),
-    ',': (-1, 0),
-    '.': (-1, 1),
-    'm': (-1, -1),
-    'I': (1, 0),
-    'O': (1, -1),
-    'J': (0, 1),
-    'L': (0, -1),
-    'U': (1, 1),
-    'M': (-1, -1),
+MOVEMENT = {
+    "i": (1.0, 0.0, 0.0),
+    ",": (-1.0, 0.0, 0.0),
+    "j": (0.0, 1.0, 0.0),
+    "l": (0.0, -1.0, 0.0),
+    "u": (1.0, 0.0, 1.0),
+    "o": (1.0, 0.0, -1.0),
+    "m": (-1.0, 0.0, -1.0),
+    ".": (-1.0, 0.0, 1.0),
 }
-
-speedBindings = {
-    'Q': (1.1, 1.1),
-    'Z': (.9, .9),
-    'W': (1.1, 1),
-    'X': (.9, 1),
-    'E': (1, 1.1),
-    'C': (1, .9),
-    'q': (1.1, 1.1),
-    'z': (.9, .9),
-    'w': (1.1, 1),
-    'x': (.9, 1),
-    'e': (1, 1.1),
-    'c': (1, .9),
+SPEED = {
+    "q": (1.1, 1.1),
+    "z": (0.9, 0.9),
+    "w": (1.1, 1.0),
+    "x": (0.9, 1.0),
+    "e": (1.0, 1.1),
+    "c": (1.0, 0.9),
 }
 
 
+class KeyboardTeleop(Node):
+    """Own the terminal and publish commands only after explicit key input."""
 
-class Yahboom_Keybord(Node):
-	def __init__(self,name):
-		super().__init__(name)
-		self.pub = self.create_publisher(Twist,'cmd_vel',1)
-		self.declare_parameter("linear_speed_limit",1.0)
-		self.declare_parameter("angular_speed_limit",5.0)
-		self.linenar_speed_limit = self.get_parameter("linear_speed_limit").get_parameter_value().double_value
-		self.angular_speed_limit = self.get_parameter("angular_speed_limit").get_parameter_value().double_value
-		self.settings = termios.tcgetattr(sys.stdin)
-	def getKey(self):
-		tty.setraw(sys.stdin.fileno())
-		rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
-		if rlist: key = sys.stdin.read(1)
-		else: key = ''
-		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.settings)
-		return key
-	def vels(self, speed, turn):
-		return "currently:\tspeed %s\tturn %s " % (speed,turn)		
-	
-def main():
-	rclpy.init()
-	yahboom_keyboard = Yahboom_Keybord("yahboom_keyboard_ctrl")
-	xspeed_switch = True
-	(speed, turn) = (0.2, 1.0)
-	(x, th) = (0, 0)
-	status = 0
-	stop = False
-	count = 0
-	twist = Twist()
-	try:
-		print(msg)
-		print(yahboom_keyboard.vels(speed, turn))
-		while (1):
-			key = yahboom_keyboard.getKey()
-			if key=="t" or key == "T": xspeed_switch = not xspeed_switch
-			elif key == "s" or key == "S":
-				print ("stop keyboard control: {}".format(not stop))
-				stop = not stop
-			if key in moveBindings.keys():
-				x = moveBindings[key][0]
-				th = moveBindings[key][1]
-				count = 0	
-			elif key in speedBindings.keys():
-				speed = speed * speedBindings[key][0]
-				turn = turn * speedBindings[key][1]
-				count = 0
-				if speed > yahboom_keyboard.linenar_speed_limit: 
-					speed = yahboom_keyboard.linenar_speed_limit
-					print("Linear speed limit reached!")
-				if turn > yahboom_keyboard.angular_speed_limit: 
-					turn = yahboom_keyboard.angular_speed_limit
-					print("Angular speed limit reached!")
-				print(yahboom_keyboard.vels(speed, turn))
-				if (status == 14): print(msg)
-				status = (status + 1) % 15
-			elif key == ' ': (x, th) = (0, 0)
-			else:
-				count = count + 1
-				if count > 4: (x, th) = (0, 0)
-				if (key == '\x03'): break
-			if xspeed_switch: twist.linear.x = speed * x
-			else: twist.linear.y = speed * x
-			twist.angular.z = turn * th
-			if not stop: yahboom_keyboard.pub.publish(twist)
-			if stop:yahboom_keyboard.pub.publish(Twist())
-	except Exception as e: print(e)
-	finally: yahboom_keyboard.pub.publish(Twist())
-	termios.tcsetattr(sys.stdin, termios.TCSADRAIN, yahboom_keyboard.settings)
-	yahboom_keyboard.destroy_node()
-	rclpy.shutdown()
+    def __init__(self) -> None:
+        super().__init__("x3_keyboard_teleop")
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel")
+        self.declare_parameter("max_linear_speed", 0.20)
+        self.declare_parameter("max_angular_speed", 1.0)
+        self.declare_parameter("initial_linear_speed", 0.10)
+        self.declare_parameter("initial_angular_speed", 0.50)
+        self.declare_parameter("key_timeout", 0.30)
+        self.max_linear = float(self.get_parameter("max_linear_speed").value)
+        self.max_angular = float(self.get_parameter("max_angular_speed").value)
+        self.linear_speed = float(
+            self.get_parameter("initial_linear_speed").value
+        )
+        self.angular_speed = float(
+            self.get_parameter("initial_angular_speed").value
+        )
+        self.key_timeout = float(self.get_parameter("key_timeout").value)
+        if (
+            not 0.0 < self.linear_speed <= self.max_linear <= 0.20
+            or not 0.0 < self.angular_speed <= self.max_angular <= 1.0
+            or self.key_timeout <= 0.0
+        ):
+            raise ValueError("unsafe keyboard speed or timeout configuration")
+        self.publisher = self.create_publisher(
+            Twist, str(self.get_parameter("cmd_vel_topic").value), 10
+        )
+        self.active = False
+        self.last_motion_key = time.monotonic()
+
+    def publish_stop(self) -> None:
+        self.publisher.publish(Twist())
+        self.active = False
+
+    def publish_motion(self, x: float, y: float, yaw: float) -> None:
+        command = Twist()
+        command.linear.x = x * self.linear_speed
+        command.linear.y = y * self.linear_speed
+        command.angular.z = yaw * self.angular_speed
+        self.publisher.publish(command)
+        self.last_motion_key = time.monotonic()
+        self.active = True
+
+    def adjust_speed(self, linear_scale: float, angular_scale: float) -> None:
+        self.linear_speed = min(
+            self.max_linear, max(0.02, self.linear_speed * linear_scale)
+        )
+        self.angular_speed = min(
+            self.max_angular, max(0.10, self.angular_speed * angular_scale)
+        )
+        print(
+            "linear %.2f m/s; angular %.2f rad/s"
+            % (self.linear_speed, self.angular_speed)
+        )
+
+
+def _read_key(settings, timeout: float) -> str:
+    tty.setraw(sys.stdin.fileno())
+    try:
+        ready, _, _ = select.select([sys.stdin], [], [], timeout)
+        return sys.stdin.read(1) if ready else ""
+    finally:
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+
+
+def main(args=None) -> None:
+    """Run interactive keyboard control with a fail-safe release timeout."""
+    if not sys.stdin.isatty():
+        raise RuntimeError("keyboard teleop requires an interactive terminal")
+    settings = termios.tcgetattr(sys.stdin)
+    rclpy.init(args=args)
+    node = KeyboardTeleop()
+    print(HELP)
+    try:
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.0)
+            key = _read_key(settings, min(0.05, node.key_timeout / 2.0))
+            normalized = key.lower()
+            if key == "\x03":
+                break
+            if normalized in MOVEMENT:
+                node.publish_motion(*MOVEMENT[normalized])
+            elif normalized in SPEED:
+                node.adjust_speed(*SPEED[normalized])
+            elif normalized in (" ", "k"):
+                node.publish_stop()
+            elif node.active and (
+                time.monotonic() - node.last_motion_key > node.key_timeout
+            ):
+                node.publish_stop()
+    finally:
+        node.publish_stop()
+        rclpy.spin_once(node, timeout_sec=0.05)
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+        node.destroy_node()
+        rclpy.shutdown()

@@ -1,0 +1,12 @@
+# ROSMASTER X3 udev template. This file is intentionally nonfunctional until
+# every *_SERIAL placeholder is replaced with a value observed on one robot.
+# Install the edited file as /etc/udev/rules.d/99-rosmaster-x3.rules.
+
+# Typical CH340 motor controller. Confirm vendor/product and serial first.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", ATTRS{serial}=="MOTOR_SERIAL", SYMLINK+="robot/motor", GROUP="dialout", MODE="0660"
+
+# Typical CP210x adapter used by a Slamtec A1. Confirm on the actual unit.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="LIDAR_SERIAL", SYMLINK+="robot/lidar", GROUP="dialout", MODE="0660"
+
+# Install the pinned Orbbec driver's own USB rules for Astra permissions. Camera
+# selection is by ROSMASTER_ASTRA_SERIAL, not by a /dev/video* index.

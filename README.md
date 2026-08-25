@@ -1,33 +1,55 @@
-# Physical ROSMASTER
+# Physical ROSMASTER X3 Platform
 
-ROS 2 Humble source workspace for the physical Yahboom ROSMASTER X3 mecanum robots used by AIRclub UdeSA.
+This repository is the robot-side hardware platform for AIRclub UdeSA's Yahboom ROSMASTER X3 fleet. It deliberately provides no autonomous behavior, localization, mapping, navigation, perception application, or EKF. A project repository should run on top of it and own those choices.
 
-This repository contains the robot-side packages, launch files, descriptions, hardware drivers, navigation/SLAM configuration, and setup notes needed to run the real robot. It is meant to be cloned into a ROS 2 workspace, usually inside the `rosmaster_humble` Docker container on the robot.
+The default stack provides:
 
-The goal is repeatable robot preparation: whether a ROSMASTER is freshly built or already in service, the repo should give a clear path to clone, build, validate, and start it from the docs.
+- motor-controller access and a watchdog-protected `/cmd_vel` input;
+- four-wheel encoder state and mecanum wheel odometry;
+- robot description and TF;
+- raw and Madgwick-filtered IMU data;
+- angle-compensated, cable-masked A1 LiDAR data;
+- calibrated Astra RGB-D data normalized to the simulator contract;
+- standard `/diagnostics` health for controller telemetry and wheel odometry;
+- voltage, firmware, magnetometer, buzzer, and RGB hardware extensions.
 
-## Repository Status
+Default bringup never publishes `/cmd_vel`. Joystick, keyboard, pulse tests, and calibration are separate, explicit operator actions.
 
-- Target robot: Yahboom ROSMASTER X3 mecanum base
-- Target ROS distro: ROS 2 Humble
-- Main robot workspace: `/root/yahboomcar_ws`
-- Expected robot clone path: `/root/yahboomcar_ws/src/physical_rosmaster`
-- Docker image used in the current setup: `yahboomtechnology/ros-humble:4.1.2`
-- Docker container name used in the current setup: `rosmaster_humble`
+## Public contract
 
-`Rosmaster_Lib` is not vendored in this repository. On the robot, it is copied into the container from the Yahboom host installation and exposed to Python.
+The machine-readable contract is [config/robot_contract.yaml](config/robot_contract.yaml). It matches simulator commit `772ba25` except for `/clock` and ground truth.
 
-## Relation To The Simulator
+| Interface | Physical implementation |
+|---|---|
+| `/cmd_vel` | `geometry_msgs/Twist` input; no default publisher |
+| `/joint_states` | Position and velocity for four simulator-named wheel joints |
+| `/odom` | Encoder-only mecanum odometry, `odom` → `base_footprint` |
+| `/tf` | Wheel odometry owns `odom` → `base_footprint` |
+| `/imu/data` | Madgwick-filtered IMU; `use_mag=false`; no IMU TF |
+| `/scan` | A1 scan in `laser_link`, after physical cable/self-return masking |
+| `/cam_1/color/*` | Calibrated RGB8 color image and camera info |
+| `/cam_1/depth/*` | Metric 32FC1 depth, camera info, and XYZRGB cloud |
 
-The simulator lives in a separate repository:
+The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/data_raw`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available.
 
-https://github.com/AIRclub-UdeSA/yahboom_rosmaster
+## Retained packages
 
-Keep the repositories separate. Simulator users should not need physical robot dependencies, Docker setup, serial devices, camera/LiDAR hardware access, or Yahboom hardware libraries. The long-term goal is to make both repos share the same robot contract: topic names, frame names, wheel geometry, and odometry behavior.
+`colcon list --base-paths .` discovers exactly these eight local packages:
 
-## Quick Start: Workstation
+- `yahboomcar_bringup`: strict X3 driver and complete platform launch;
+- `yahboomcar_base_node`: encoder-only mecanum `/odom` and TF;
+- `yahboomcar_description`: canonical X3 description;
+- `yahboomcar_ctrl`: opt-in joystick and keyboard operator tools;
+- `yahboomcar_astra`: Astra normalization and strict sensor watchdog;
+- `sllidar_ros2`: A1 driver and platform scan preprocessing;
+- `yahboomcar_visual`: generic scan/image inspection conversions;
+- `laserscan_to_point_pulisher`: generic `LaserScan` → `PointCloud2` utility. The historical package spelling is retained.
 
-Use a workstation for source review, Git work, documentation, and hardware-free tests.
+Removed behavior packages are recoverable at tag `pre-platform-contract-cleanup` or through Git history.
+
+## Workstation setup
+
+The target runtime remains ROS 2 Humble inside the robot container. A workstation can review, test, and build with a compatible ROS 2 environment.
 
 ```bash
 mkdir -p ~/rosmaster_physical_ws/src
@@ -35,132 +57,107 @@ cd ~/rosmaster_physical_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
 
 cd ~/rosmaster_physical_ws
+vcs import src < src/physical_rosmaster/physical_rosmaster.repos
 source /opt/ros/humble/setup.bash
-colcon list --base-paths src/physical_rosmaster
-colcon build --symlink-install --packages-select yahboomcar_base_node
-colcon test --packages-select yahboomcar_base_node --ctest-args -R test_x3_odometry
-```
-
-Full workspace builds may require the same ROS dependencies used on the robot. The focused `yahboomcar_base_node` test is the current hardware-free odometry regression check.
-
-## Quick Start: Robot
-
-Inside the robot's `rosmaster_humble` container:
-
-```bash
-cd /root/yahboomcar_ws
-source /opt/ros/humble/setup.bash
-
-cd /root/yahboomcar_ws/src
-git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
-
-cd /root/yahboomcar_ws
-colcon list --base-paths src/physical_rosmaster
+rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
-source install/setup.bash
 ```
 
-Before replacing an existing robot workspace, back up the old `src` tree. The full clone/build/autostart procedure is documented in `docs/setup_guide_ros2_humble_autostart.md`.
+The `.repos` file pins Orbbec's `ros2_astra_camera` to `f7e71d9ce806e788cb48d8580aac2c778fba4214`. Do not replace the pin without repeating camera contract validation.
 
-## Large Optional Artifacts
-
-These files are intentionally excluded from Git:
-
-- `yahboomcar_slam/params/ORBvoc.txt`
-- `yahboomcar_slam/pcl/*.pcd`
-
-Normal robot bringup, teleoperation, camera, LiDAR, IMU, EKF, and base odometry should not require them. Restore them only for ORB-SLAM-related workflows or point-cloud examples:
+Focused hardware-free checks:
 
 ```bash
-tools/fetch_large_artifacts.sh
+colcon test --packages-select yahboomcar_base_node
+colcon test-result --verbose
+python3 -m pytest -q \
+  src/physical_rosmaster/yahboomcar_bringup/test/test_x3_driver_utils.py \
+  src/physical_rosmaster/yahboomcar_ctrl/test/test_teleop_safety.py \
+  src/physical_rosmaster/yahboomcar_astra/test/test_sensor_adapter.py \
+  src/physical_rosmaster/laserscan_to_point_pulisher/test/test_scan_conversion.py
 ```
 
-Checksums and manual download instructions are in `docs/large_artifacts.md`.
+## Robot setup and manual bringup
 
-The `yahboomcar_slam` package now skips the optional `pcl` install path when the directory is absent, so a clean clone can build the core workspace without restoring the large bundle first.
+The expected clone path is `/root/yahboomcar_ws/src/physical_rosmaster` in the `rosmaster_humble` container. `Rosmaster_Lib` remains a robot-provided dependency and is not vendored here.
 
-## Package Inventory
+Discover and configure stable hardware identities before launch:
 
-Buildable packages currently discovered by `colcon`:
+```bash
+ls -l /dev/serial/by-id
+lsusb
+ros2 run astra_camera list_devices_node
+```
 
-- `laserscan_to_point_pulisher`
-- `robot_pose_publisher`
-- `sllidar_ros2`
-- `yahboom_app_save_map`
-- `yahboom_web_savmap_interfaces`
-- `yahboomcar_astra`
-- `yahboomcar_base_node`
-- `yahboomcar_bringup`
-- `yahboomcar_ctrl`
-- `yahboomcar_description`
-- `yahboomcar_description_x1`
-- `yahboomcar_laser`
-- `yahboomcar_linefollow`
-- `yahboomcar_mediapipe`
-- `yahboomcar_msgs`
-- `yahboomcar_nav`
-- `yahboomcar_slam`
-- `yahboomcar_visual`
-- `yahboomcar_voice_ctrl`
+Set per-robot identities in the container environment:
 
-Packages present but ignored by `COLCON_IGNORE`:
+```bash
+export ROSMASTER_MOTOR_PORT=/dev/serial/by-id/<motor-controller-id>
+export ROSMASTER_LIDAR_PORT=/dev/robot/lidar
+export ROSMASTER_ASTRA_SERIAL=<astra-serial>
+```
 
-- `yahboomcar_KCFTracker`
-- `robot_pose_publisher_ros2`
-- `yahboomcar_point`
+Then launch manually:
 
-## Odometry Status
+```bash
+cd /root/yahboomcar_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
+```
 
-The physical X3 odometry path calculates mecanum body velocities from wheel encoder feedback published on `/joint_states`, falling back to firmware velocity integration if joint states are unavailable.
+Normal bringup shuts down when a required process exits. The motor driver also fails after sustained encoder/telemetry loss, and the camera adapter fails if all valid RGB-D streams do not appear within its startup deadline. The physical probe requires healthy controller and encoder `/diagnostics` before passing.
 
-Current flow:
-
-- `yahboomcar_bringup/Mcnamu_driver_X3.py` subscribes to `/cmd_vel` and sends commands via `Rosmaster_Lib.Rosmaster.set_car_motion(...)`.
-- The driver clamps commands, stops after a configurable `cmd_vel_timeout`, and sends repeated zero commands during startup, timeout, and shutdown.
-- `Mcnamu_driver_X3.py` polls `Rosmaster_Lib.Rosmaster.get_motor_encoder()` and publishes four-wheel positions and angular velocities on `/joint_states`.
-- It also publishes `/vel_raw` from `Rosmaster_Lib.Rosmaster.get_motion_data()` for firmware speed telemetry.
-- `yahboomcar_base_node/src/base_node_X3.cpp` consumes `/joint_states`, rejects stale/discontinuous input, evaluates 4-wheel mecanum kinematics, and integrates body velocities into `/odom_raw` using midpoint heading.
-- `robot_localization` (EKF) fuses `/odom_raw` and `/imu/data`, publishing `/odom` and broadcasting `odom -> base_footprint`.
-
-Validation status & checklist:
-
-- The earlier floor pulse tests verified that encoder feedback changes and raw odometry calculates from it, but they had no external ground truth and did not satisfy the lifted validation gate.
-- Direction-controlled per-wheel hand testing validated raw packet-field order `[m1, m3, m2, m4] = [FL, FR, BL, BR]`, with forward-positive signs on all four wheels. The operator also confirmed Yahboom's physical port layout: `[FL, FR, BL, BR] = [M4, M2, M3, M1]`. Packet fields and printed PCB motor-port labels are distinct, so the earlier wiring-fault conclusion and proposed cable swaps were withdrawn.
-- The true lifted repetition on 2026-08-21 passed the forward, strafe-left, and CCW wheel-sign and raw-odometry integration gates. Per-wheel magnitude/leakage bias and provisional CPR remain documented in `agents/x3-c_validation_checklist.md`.
-- The 2026-08-21 charged-pack floor follow-up confirmed repeatable motion and encoder/odom response at `0.15 m/s`; the operator described the three-second run as visually smooth. No precise external distance or heading measurement was captured, so scale and covariance calibration remain outstanding.
-
-Validation probe tools:
+In a second shell, run the contract gate:
 
 ```bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/rosmaster_lib_probe.py --hash-only
-python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
+python3 tools/physical_contract_probe.py
 ```
 
-Run the sampling probe only when `driver_node` is stopped; both processes use the motor-controller serial port. The next required powered validation must be supervised, use the bounded pulse tool, and have the robot securely lifted. Floor testing has separate battery, clearance, and ground-truth gates in the validation checklist:
+## Operator tools
+
+These are never part of default bringup.
 
 ```bash
-python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5 --require-recorder
+# Joystick: held deadman, configurable mapping, timeout, release stop
+ros2 launch yahboomcar_ctrl yahboomcar_joy_launch.py device_id:=0
+
+# Keyboard: must run in an interactive terminal
+ros2 run yahboomcar_ctrl yahboom_keyboard
+
+# Bounded supervised pulse
+python3 tools/safe_cmd_vel_pulse.py --x 0.10 --duration 1.0 --require-recorder
+
+# Raw IMU and magnetometer inspection
+ros2 topic echo /imu/data_raw
+ros2 topic echo /imu/mag
 ```
 
-See `agents/x3-c_validation_checklist.md` and `docs/odometry_validation.md` for the full test procedure.
+Manual control is capped at `0.20 m/s` linear and `1.0 rad/s` angular, with lower gears available. Calibration nodes start inert and require an explicit `start_test=true` parameter after their bounded settings are reviewed.
 
-## Troubleshooting
+## Rollout status
 
-- `docs/troubleshooting/README.md`: incident-driven troubleshooting index and robot failure notes.
+Autostart is intentionally deferred. The feature is ready for robot-side platform validation, not fleet startup.
+
+The gate is:
+
+1. identify the actual Astra model and serial and install its udev rules;
+2. pass non-motion contract checks;
+3. pass lifted command, encoder, odometry, watchdog, and deadman checks;
+4. repeat bounded forward, lateral, and rotation floor trials;
+5. run one minimal consumer against simulator and hardware without remaps.
+
+Only after one X3 passes all five should a new autostart routine be designed.
 
 ## Documentation
 
-- `docs/setup_guide_ros2_humble_autostart.md`: ROS 2 Humble, Docker, clone/build, hardware tests, and autostart setup.
-- `docs/workstation_and_robot_workflow.md`: how to work outside the robot versus inside the robot/container.
-- `docs/odometry_validation.md`: plan for validating encoder counters, `/vel_raw`, `/odom_raw`, and EKF output.
-- `docs/large_artifacts.md`: optional artifact bundle and checksums.
-- `docs/troubleshooting/README.md`: incident-driven troubleshooting index.
-- `context.md`: concise context for coding agents or engineers working inside the robot.
-- `agents/physical_rosmaster_todo.md`: working task list.
-- `agents/rosmaster_physical_audit.md`: initial repository audit.
-- `agents/rosmaster_lib_public_v3_3_9.md`: notes from inspecting public Yahboom `Rosmaster_Lib`.
+- [docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md): manual robot setup and the explicit autostart gate;
+- [docs/workstation_and_robot_workflow.md](docs/workstation_and_robot_workflow.md): workstation/robot responsibilities;
+- [docs/odometry_validation.md](docs/odometry_validation.md): encoder-only odometry validation;
+- [agents/README.md](agents/README.md): status of pre-cleanup audit and validation evidence;
+- [docs/troubleshooting/README.md](docs/troubleshooting/README.md): incident history and known issues.
 
-## License Caveat
+## Provenance and licensing
 
-This repository includes Yahboom-derived source and a vendored copy of `sllidar_ros2`. Many package manifests still contain `TODO: Package description` and `TODO: License declaration`. Public repository visibility should not be interpreted as a clean repository-wide open-source license until package provenance and licensing are cleaned up.
+This tree includes Yahboom-derived code and the BSD-licensed Slamtec driver. Package-level metadata has been improved for maintained AIRclub packages, but that does not replace a complete repository-wide provenance review.
