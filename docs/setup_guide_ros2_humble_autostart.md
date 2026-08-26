@@ -62,7 +62,7 @@ udevadm info --attribute-walk --name=/dev/ttyUSB0
 ros2 run astra_camera list_devices_node
 ```
 
-Record exact model, vendor/product IDs, and serial for:
+Record exact model, vendor/product IDs, and stable identity for:
 
 - motor controller;
 - Slamtec A1 serial adapter;
@@ -71,6 +71,10 @@ Record exact model, vendor/product IDs, and serial for:
 If no Orbbec/Astra device appears, strict simulator parity fails. Stop here; do not prepare autostart.
 
 Use [../config/99-rosmaster-x3.rules.example](../config/99-rosmaster-x3.rules.example) as a template. Replace placeholders with observed values, install it on the host, reload udev rules, reconnect the devices, and verify the final aliases. A literal placeholder rule is intentionally nonfunctional.
+
+Prefer a unique device serial. Some CH340 motor controllers expose no serial;
+for those units, bind `/dev/robot/motor` to a dedicated physical USB port using
+the documented `KERNELS` fallback and verify that identity after reboot.
 
 ## 5. Configure identities
 

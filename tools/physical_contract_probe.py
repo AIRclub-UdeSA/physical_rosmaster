@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Validate the physical X3 against the simulator-facing robot contract.
+"""
+Validate the physical X3 against the simulator-facing robot contract.
 
 Derived from the simulator probe at commit 772ba250bafeb0e93e651b7d8d78a4598feba118.
 Simulation clock, ground truth, simulator-specific rates, and ideal camera FOV
@@ -114,7 +115,10 @@ class PhysicalContractProbe(Node):
             depth=20, reliability=ReliabilityPolicy.BEST_EFFORT
         )
         static_tf_qos = QoSProfile(
-            depth=1,
+            # Retain latched samples from both robot_state_publisher and the
+            # camera driver.  Depth 1 can let one writer replace the other's
+            # sample before this probe starts spinning.
+            depth=100,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
             reliability=ReliabilityPolicy.RELIABLE,
         )

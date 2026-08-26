@@ -17,10 +17,10 @@ from rosidl_runtime_py.utilities import get_message
 
 NANOSECONDS_PER_SECOND = 1_000_000_000
 WHEEL_NAMES = (
-    "front_left_joint",
-    "front_right_joint",
-    "back_left_joint",
-    "back_right_joint",
+    "front_left_wheel_joint",
+    "front_right_wheel_joint",
+    "back_left_wheel_joint",
+    "back_right_wheel_joint",
 )
 PULSE_LOG_PATTERN = re.compile(
     r"Starting bounded pulse: "

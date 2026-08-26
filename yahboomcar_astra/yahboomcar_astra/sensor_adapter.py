@@ -65,7 +65,11 @@ def metric_depth(message: Image, scale: float) -> Image:
     output.encoding = "32FC1"
     output.is_bigendian = False
     output.step = message.width * 4
-    output.data = np.ascontiguousarray(converted, dtype="<f4").tobytes()
+    # Fill the generated array directly.  Assigning through the ROS property
+    # makes its Python setter validate every byte before doing the same copy.
+    output.data.frombytes(
+        np.ascontiguousarray(converted, dtype="<f4").tobytes()
+    )
     return output
 
 
@@ -93,7 +97,7 @@ def rgb_image(message: Image) -> Image:
     output.encoding = "rgb8"
     output.is_bigendian = False
     output.step = message.width * 3
-    output.data = np.ascontiguousarray(converted).tobytes()
+    output.data.frombytes(np.ascontiguousarray(converted).tobytes())
     return output
 
 
@@ -119,7 +123,15 @@ def transform_cloud(
     quaternion: Iterable[float],
     target_frame: str,
 ) -> PointCloud2:
-    """Transform XYZ fields while preserving RGB and organized cloud layout."""
+    """
+    Transform a callback-owned cloud in place, preserving RGB and layout.
+
+    ROS 2's generated Python setter validates every byte assigned to a uint8
+    sequence.  A 640x480 XYZRGB cloud is several megabytes, so copying the
+    transformed buffer into a second ``PointCloud2`` can starve every other
+    camera callback on the robot.  Subscription callbacks own their message,
+    which makes updating that buffer directly both safe and bounded.
+    """
     field_offsets = {field.name: field.offset for field in message.fields}
     if not {"x", "y", "z"}.issubset(field_offsets):
         raise ValueError("point cloud does not contain x, y, and z fields")
@@ -131,7 +143,7 @@ def transform_cloud(
     if len(message.data) < expected_size:
         raise ValueError("truncated point cloud")
 
-    mutable_data = bytearray(message.data)
+    mutable_data = message.data
     byte_order = ">" if message.is_bigendian else "<"
     coordinates = []
     for field_name in ("x", "y", "z"):
@@ -156,18 +168,8 @@ def transform_cloud(
         for axis, values in zip(coordinates, xyz.T):
             axis[finite] = values[finite].astype(np.float32)
 
-    output = PointCloud2()
-    output.header = message.header
-    output.header.frame_id = target_frame
-    output.height = message.height
-    output.width = message.width
-    output.fields = message.fields
-    output.is_bigendian = message.is_bigendian
-    output.point_step = message.point_step
-    output.row_step = message.row_step
-    output.data = bytes(mutable_data)
-    output.is_dense = message.is_dense
-    return output
+    message.header.frame_id = target_frame
+    return message
 
 
 class AstraSensorAdapter(Node):
@@ -337,6 +339,8 @@ def main(args=None) -> None:
     try:
         node = AstraSensorAdapter()
         rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     except Exception as error:  # noqa: BLE001 - process must fail closed
         exit_code = 1
         if node is not None:

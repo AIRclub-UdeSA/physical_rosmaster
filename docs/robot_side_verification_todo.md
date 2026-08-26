@@ -110,7 +110,9 @@ udevadm info --attribute-walk --name=/dev/ttyUSB0
 ros2 run astra_camera list_devices_node
 ```
 
-- [ ] Record the motor-controller vendor/product IDs and unique serial identity.
+- [ ] Record the motor-controller vendor/product IDs and stable identity. Prefer
+  a unique serial; if the controller exposes none, dedicate and record its
+  physical USB port.
 - [ ] Record the Slamtec A1 adapter vendor/product IDs and unique serial identity.
 - [ ] Confirm the camera is an Astra-family Orbbec device and record its exact
   model and serial.

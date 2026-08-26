@@ -57,11 +57,30 @@ def generate_launch_description():
                 "enable_point_cloud": False,
                 "enable_colored_point_cloud": True,
                 "color_depth_synchronization": True,
+                # Keep the full 30 Hz cadence while bounding XYZRGB conversion
+                # work on the Raspberry Pi.  Both Astra functions provide this
+                # native mode, so registration and camera_info stay aligned.
+                "color_width": 320,
+                "color_height": 240,
+                "depth_width": 320,
+                "depth_height": 240,
+                # The X3 Astra exposes OpenNI depth as 2bc5:060f and RGB as a
+                # separate UVC function at 2bc5:050f. The pinned driver's
+                # Astra Pro Plus launch uses this same split-device path.
+                "use_uvc_camera": True,
+                "uvc_vendor_id": 0x2BC5,
+                "uvc_product_id": 0x050F,
+                "uvc_camera_format": "mjpeg",
                 "publish_tf": True,
                 "tf_publish_rate": 0.0,
                 "color_qos": "sensor_data",
                 "depth_qos": "sensor_data",
+                # Upstream's XYZRGB synchronizer uses this setting for its
+                # color camera-info subscription, despite the parameter name.
+                "depth_camera_info_qos": "sensor_data",
                 "point_cloud_qos": "sensor_data",
+                "rgb_qos_profile": "sensor_data",
+                "rgb_info_qos_profile": "sensor_data",
             }
         ],
     )

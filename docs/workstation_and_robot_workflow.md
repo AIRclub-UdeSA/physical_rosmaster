@@ -87,6 +87,10 @@ ros2 run astra_camera list_devices_node
 
 Copy and edit [../config/99-rosmaster-x3.rules.example](../config/99-rosmaster-x3.rules.example) on the robot host. Never deploy placeholder serial values. Reload rules, reconnect hardware, and verify aliases before starting ROS.
 
+Use a unique device serial when available. If the CH340 motor controller has no
+serial, bind its alias to a dedicated physical USB port with the template's
+`KERNELS` fallback and verify that port after reboot.
+
 Configure the container:
 
 ```bash
