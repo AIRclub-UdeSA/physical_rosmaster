@@ -73,13 +73,22 @@ df -h
 
 Remove old stopped containers or unused images only after confirming they are not needed. The old Foxy images can consume significant disk space.
 
-For a deep clean (stopped containers, dangling and unused images, unused networks, and build cache), use:
+Do not use aggressive pruning as the first response to low disk space or a
+LightDM login loop. An active image and active container can consume most of the
+disk while reporting no reclaimable space, and `docker system prune -a` does not
+shrink an active container's writable layer. Diagnose the actual consumers
+first; see [Root Filesystem Full Causing LightDM Login Loop And Docker Growth](troubleshooting/known_issues/root-filesystem-full-login-loop.md).
+
+If inspection confirms that stopped containers, unused images, unused networks,
+and build cache are genuinely disposable, the deep-clean command is:
 
 ```bash
 docker system prune -a
 ```
 
-This removes anything not associated with a running container, so double-check `docker ps -a` first and confirm before running it on a shared robot.
+This removes anything not associated with a running container, so double-check
+`docker ps -a`, preserve robot artifacts, and confirm every deletion before
+running it on a shared robot. Never delete `/var/lib/docker` manually.
 
 Pull the Humble image:
 
@@ -516,4 +525,22 @@ Expected core nodes include the driver node, LiDAR node, camera node, and robot 
 
 ## Future Hardening
 
-This guide preserves the currently working deployment style. Later cleanup should move autostart scripts, systemd units, udev rules, and device checks into versioned files under this repo.
+This guide preserves the currently working deployment style. Later cleanup
+should move autostart scripts, systemd units, udev rules, and device checks into
+versioned files under this repo.
+
+The future host service should also apply the storage lessons from
+[the `x3-c` disk-full incident](troubleshooting/known_issues/root-filesystem-full-login-loop.md):
+
+- run a host-level disk-space guard with `ExecStartPre` and refuse ROS startup
+  at `95%` used or below `2 GiB` free;
+- cap persistent journald storage and rotate Docker container logs;
+- keep cache cleanup in a separate systemd timer, never in ROS bringup;
+- monitor the container writable layer plus VS Code Server state on both the
+  host and container;
+- preserve bags, calibration, `robot_artifacts/`, and other acceptance evidence;
+- keep the accepted bringup in the foreground so required-process failures
+  propagate to systemd instead of being hidden by `nohup`.
+
+Test the disk guard by temporarily raising its threshold. Do not test it by
+actually filling the robot's SD card.
