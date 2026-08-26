@@ -105,6 +105,10 @@ The launch arguments can override these environment variables for a single run.
 
 Use [robot_side_verification_todo.md](robot_side_verification_todo.md) as the
 authoritative, evidence-backed checklist for the first robot acceptance run.
+For the current `x3-c` follow-up, execute
+[robot_side_next_moves.md](robot_side_next_moves.md) in order; it prioritizes a
+clean PR-head deployment and resolution of the weak wheel response before any
+new floor trial.
 
 Start the platform manually:
 

@@ -155,6 +155,7 @@ Only after one X3 passes all five should a new autostart routine be designed.
 - [docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md): manual robot setup and the explicit autostart gate;
 - [docs/workstation_and_robot_workflow.md](docs/workstation_and_robot_workflow.md): workstation/robot responsibilities;
 - [docs/robot_side_verification_todo.md](docs/robot_side_verification_todo.md): mandatory first-robot verification checklist and evidence record;
+- [docs/robot_side_next_moves.md](docs/robot_side_next_moves.md): ordered runbook for closing the remaining PR #3 robot gates;
 - [docs/odometry_validation.md](docs/odometry_validation.md): encoder-only odometry validation;
 - [agents/README.md](agents/README.md): status of pre-cleanup audit and validation evidence;
 - [docs/troubleshooting/README.md](docs/troubleshooting/README.md): incident history and known issues.

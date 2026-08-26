@@ -2,6 +2,11 @@
 
 Status: in progress; autostart and PR readiness remain blocked.
 
+Next session: follow
+[`docs/robot_side_next_moves.md`](../docs/robot_side_next_moves.md) from a clean
+current PR head. Resolve the charged, lifted-wheel gate before any further floor
+trial.
+
 ## Test record
 
 - Robot identifier: `x3-c`, Raspberry Pi 5 Model B Rev 1.0.
