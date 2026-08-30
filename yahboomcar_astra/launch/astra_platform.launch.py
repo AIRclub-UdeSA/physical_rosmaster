@@ -88,6 +88,12 @@ def generate_launch_description():
         package="yahboomcar_astra",
         executable="astra_sensor_adapter",
         output="screen",
+        # The 320x240 XYZ transform is a tall-by-3 matrix operation. Letting
+        # OpenBLAS create one worker per core makes this small operation slower
+        # and can starve the RGB-D graph on the Raspberry Pi. Keep the limit
+        # local to the adapter instead of depending on an operator shell or
+        # constraining unrelated platform processes.
+        additional_env={"OPENBLAS_NUM_THREADS": "1"},
         parameters=[
             {
                 "startup_timeout": ParameterValue(
