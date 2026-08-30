@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Inspect Rosmaster_Lib without commanding robot motion."""
+"""Inspect Rosmaster_Lib and passively sample controller telemetry."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import inspect
+import struct
 import sys
 import time
 from pathlib import Path
@@ -39,7 +40,15 @@ def hash_source(rosmaster_class) -> tuple[Path, str, int, str]:
         raise RuntimeError("Could not locate Rosmaster source file")
 
     path = Path(source_file)
-    data = path.read_bytes()
+    try:
+        data = path.read_bytes()
+    except OSError:
+        module = sys.modules.get(rosmaster_class.__module__)
+        loader = getattr(module, "__loader__", None)
+        get_data = getattr(loader, "get_data", None)
+        if get_data is None:
+            raise
+        data = get_data(source_file)
     digest = hashlib.sha256(data).hexdigest()
     version_line = ""
     for line in data.decode("utf-8", errors="replace").splitlines():
@@ -63,13 +72,61 @@ def print_source_report(rosmaster_class) -> bool:
     return matches_public
 
 
-def sample_hardware(
-    rosmaster_class, port: str, samples: int, period: float
-) -> int:
-    """Print read-only motion, encoder, and battery samples from hardware."""
+def extract_frames(buffer: bytearray):
+    """Remove and return checksum-valid controller frames from ``buffer``."""
+    frames = []
+    while len(buffer) >= 4:
+        frame_start = buffer.find(b"\xff\xfb")
+        if frame_start < 0:
+            if buffer[-1:] == b"\xff":
+                del buffer[:-1]
+            else:
+                buffer.clear()
+            break
+        if frame_start:
+            del buffer[:frame_start]
+        if len(buffer) < 4:
+            break
+
+        ext_len = buffer[2]
+        frame_len = ext_len + 2
+        if ext_len < 3:
+            del buffer[0]
+            continue
+        if len(buffer) < frame_len:
+            break
+
+        ext_type = buffer[3]
+        ext_data = bytes(buffer[4:frame_len])
+        if (
+            ext_data
+            and (ext_len + ext_type + sum(ext_data[:-1])) & 0xFF
+            == ext_data[-1]
+        ):
+            frames.append((ext_type, ext_data[:-1]))
+            del buffer[:frame_len]
+        else:
+            del buffer[0]
+    return frames
+
+
+def sample_hardware(port: str, samples: int, period: float) -> int:
+    """Passively print motion, encoder, and battery auto-report samples."""
     try:
-        car = rosmaster_class(com=port)
-        car.create_receive_threading()
+        import serial  # type: ignore
+
+        serial_port = serial.Serial(
+            port=None,
+            baudrate=115200,
+            timeout=min(period, 0.1),
+            exclusive=True,
+        )
+        # Avoid control-line transitions when the port is opened.  This probe
+        # never calls Serial.write() and sends no controller request frames.
+        serial_port.dtr = False
+        serial_port.rts = False
+        serial_port.port = port
+        serial_port.open()
     except Exception as exc:  # pragma: no cover - hardware dependency
         print(
             f"ERROR: failed to open Rosmaster on {port}: {exc}",
@@ -81,21 +138,54 @@ def sample_hardware(
         "sample,motion_vx,motion_vy,motion_vz,encoder_m1,encoder_m2,"
         "encoder_m3,encoder_m4,battery"
     )
-    for index in range(samples):
-        try:
-            vx, vy, vz = car.get_motion_data()
-            m1, m2, m3, m4 = car.get_motor_encoder()
-            battery = car.get_battery_voltage()
-        except Exception as exc:  # pragma: no cover - hardware dependency
-            print(f"ERROR: sample failed: {exc}", file=sys.stderr)
-            return 4
+    buffer = bytearray()
+    motion = None
+    encoders = None
+    battery = None
+    emitted = 0
+    next_sample = time.monotonic()
+    deadline = next_sample + max(2.0, samples * period + 2.0)
+    try:
+        while emitted < samples and time.monotonic() < deadline:
+            buffer.extend(serial_port.read(serial_port.in_waiting or 1))
+            for ext_type, payload in extract_frames(buffer):
+                if ext_type == 0x0A and len(payload) >= 7:
+                    vx, vy, vz, battery_raw = struct.unpack(
+                        "<hhhB", payload[:7]
+                    )
+                    motion = (vx / 1000.0, vy / 1000.0, vz / 1000.0)
+                    battery = battery_raw / 10.0
+                elif ext_type == 0x0D and len(payload) >= 16:
+                    encoders = struct.unpack("<iiii", payload[:16])
 
+            now = time.monotonic()
+            if (
+                motion is not None
+                and encoders is not None
+                and battery is not None
+                and now >= next_sample
+            ):
+                vx, vy, vz = motion
+                m1, m2, m3, m4 = encoders
+                print(
+                    f"{emitted},{vx:.6f},{vy:.6f},{vz:.6f},"
+                    f"{m1},{m2},{m3},{m4},{battery:.3f}"
+                )
+                emitted += 1
+                next_sample = now + period
+    except Exception as exc:  # pragma: no cover - hardware dependency
+        print(f"ERROR: passive sample failed: {exc}", file=sys.stderr)
+        return 4
+    finally:
+        serial_port.close()
+
+    if emitted != samples:
         print(
-            f"{index},{vx:.6f},{vy:.6f},{vz:.6f},"
-            f"{m1},{m2},{m3},{m4},{battery:.3f}"
+            "ERROR: timed out waiting for passive speed and encoder "
+            "auto-report frames",
+            file=sys.stderr,
         )
-        time.sleep(period)
-
+        return 4
     return 0
 
 
@@ -128,8 +218,8 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help=(
-            "Number of motion/encoder samples to print. Opens the serial "
-            "port."
+            "Number of passive motion/encoder/battery auto-report samples "
+            "to print. Opens the serial port but transmits no bytes."
         ),
     )
     parser.add_argument(
@@ -160,9 +250,7 @@ def main() -> int:
     if args.hash_only or args.samples <= 0:
         return 0
 
-    return sample_hardware(
-        rosmaster_class, args.port, args.samples, args.period
-    )
+    return sample_hardware(args.port, args.samples, args.period)
 
 
 if __name__ == "__main__":
