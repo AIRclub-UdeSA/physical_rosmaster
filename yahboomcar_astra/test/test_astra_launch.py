@@ -52,7 +52,7 @@ def test_adapter_limits_openblas_workers():
     environments = [
         _additional_environment(action)
         for action in launch_module.generate_launch_description().entities
-        if isinstance(action, Node)
+        if isinstance(action, Node) and action.additional_env is not None
     ]
 
     assert {"OPENBLAS_NUM_THREADS": "1"} in environments
