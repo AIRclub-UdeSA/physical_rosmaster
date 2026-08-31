@@ -7,8 +7,18 @@ authorize autostart work.
 Use [robot_side_verification_todo.md](robot_side_verification_todo.md) as the
 acceptance checklist and
 [the first robot report](../robot_artifacts/pr3_robot_verification_2026-08-26.md)
-as historical evidence. Record the exact current PR head used for the next run;
-do not report a parent commit plus uncommitted fixes as the accepted source.
+as historical evidence. Record continuation results in
+[the 2026-08-30 recovery session](../robot_artifacts/pr3_recovery_session_2026-08-30.md).
+Record the exact current PR head used for the next run; do not report a parent
+commit plus uncommitted fixes as the accepted source.
+
+The target configuration is still the canonical new-robot setup in the root
+README and [setup guide](setup_guide_ros2_humble_autostart.md): one clean Humble
+workspace, exact robot library, stable hardware identities, manual strict
+bringup, and no default command publisher. The recovery steps in this runbook
+add evidence preservation, host/storage health checks, and removal of competing
+factory launch paths; they do not authorize restoring the old host wholesale or
+creating a second deployment architecture.
 
 ## Required order
 
@@ -27,12 +37,18 @@ Do not move to a later gate because an earlier failure appears unrelated.
 
 Before cleaning the robot workspace or `/tmp`:
 
-- [ ] Copy the three rosbag `.db3` files, all attempt-1-through-6 launch logs,
-  contract-probe output, and isolated build/test logs to durable project storage.
-- [ ] Generate SHA256 hashes for every archived payload.
-- [ ] Record durable artifact URIs and hashes in the robot verification report.
-- [ ] Confirm the stored bags open with `ros2 bag info`; committed metadata alone
+- [x] Copy the three current PR #3 rosbag `.db3` files, all attempt-1-through-6
+  launch logs, contract-probe output, and isolated build/test logs to durable
+  project storage.
+- [x] Generate SHA256 hashes for every archived payload.
+- [x] Record durable artifact URIs and hashes in the
+  [2026-08-30 recovery manifest](../robot_artifacts/pr3_recovered_evidence_2026-08-30.md).
+- [x] Confirm the stored bags open with `ros2 bag info`; committed metadata alone
   is not replayable evidence.
+
+The read-only recovery also preserved the older legacy probe bag. All four
+SQLite databases pass `PRAGMA integrity_check`, and all four open successfully
+with `ros2 bag info` in the recovered robot's ROS 2 Humble container.
 
 If an ephemeral artifact is already gone, mark it lost explicitly. Do not infer
 its contents from metadata or silently count it as archived acceptance evidence.
@@ -42,16 +58,29 @@ its contents from metadata or silently count it as archived acceptance evidence.
 - [ ] Fully charge the robot battery and record rested voltage before launch.
 - [ ] Record the observer, stop path, surface, payload, and how the lifted robot
   is restrained.
-- [ ] Persistently disable the legacy `/root/auto_start.sh` path in the external
-  container launcher and any host service that can invoke it.
-- [ ] Reboot the host and confirm the legacy ROS graph does not return on its old
+- [x] Confirm `/root/auto_start.sh` is absent, the external container starts only
+  `bash`, and no host service invokes a legacy ROS launch.
+- [x] Stop and persistently disable the factory graphical
+  `/home/pi/.config/autostart/rosmaster.desktop` entry. The 2026-08-30 preflight
+  found that its `rosmaster_main.py` process owns the motor serial device,
+  listens on LAN ports 6000/6500, and contains motor/servo command handlers.
+- [x] Reboot and verify that `rosmaster_main.py`, ports 6000/6500, and all legacy
+  ROS graphs remain absent before allowing the container to open the controller.
+- [x] Reboot the host and confirm the legacy ROS graph does not return on its old
   domain or publish `/cmd_vel`.
-- [ ] Install the reviewed
+- [x] Install the reviewed
   `robot_artifacts/99-rosmaster-x3.x3-c.rules` file and the pinned Orbbec USB
   permission rules on the host.
-- [ ] Reload udev, reconnect the devices, reboot, and verify
-  `/dev/robot/motor`, `/dev/robot/lidar`, and Astra serial `ACRC64300ET`.
-- [ ] Verify the aliases and camera permissions are visible inside the container.
+- [x] Disable the conflicting factory `usb.rules`, reload udev, reconnect the
+  devices, reboot, and verify `/dev/robot/motor` and `/dev/robot/lidar`.
+- [x] Verify the motor/LiDAR aliases and camera permissions are visible inside
+  the container.
+- [x] Confirm Astra serial `ACRC64300ET` through the pinned camera driver's
+  device-discovery path before strict bringup.
+- [ ] Reboot with all devices connected and confirm that both Astra functions
+  (`2bc5:060f` depth and `2bc5:050f` UVC/RGB) enumerate without hotplug. Repeat
+  near the established `11.3` V almost-full baseline before attributing the
+  current depth-enumeration failure to software or accepting a workaround.
 
 The motor alias depends on physical USB topology because its CH340 exposes no
 serial. Stop if `KERNELS=="1-1.2"` does not identify the dedicated controller
@@ -60,6 +89,12 @@ port after reboot.
 Do not resume motion if the charged system returns to the previous `10.2` to
 `10.3` V condition. Inspect the battery, charger, controller supply, and voltage
 drop first.
+
+For a pre-launch voltage check, use the passive auto-report path in
+`tools/rosmaster_lib_probe.py`. Do not instantiate public Rosmaster_Lib 3.3.9
+merely to read voltage: its constructor transmits a UART-servo torque-enable
+command. The probe must report the expected library hash and obtain telemetry
+without calling `Serial.write()`.
 
 ## 3. Deploy one exact, clean revision
 
@@ -75,16 +110,20 @@ git rev-parse HEAD
 git rev-parse origin/platform/simulator-parity
 ```
 
-- [ ] `git status --porcelain` is empty.
-- [ ] Local `HEAD` equals `origin/platform/simulator-parity`.
-- [ ] Record that hash as the source under test.
-- [ ] Confirm `physical_rosmaster.repos` still resolves the pinned Astra commit
+- [x] `git status --porcelain` is empty.
+- [x] Local `HEAD` equals `origin/platform/simulator-parity`. The workstation,
+  last-verified clean robot checkout, and server branch resolve to
+  `55caf7a2a572aae0ad2682e265147c46e525921c` with local divergence `0 0`.
+- [x] Record source-under-test hash
+  `55caf7a2a572aae0ad2682e265147c46e525921c`.
+- [x] Confirm `physical_rosmaster.repos` still resolves the pinned Astra commit
   `f7e71d9ce806e788cb48d8580aac2c778fba4214`.
-- [ ] Run `rosdep install`, then perform a clean isolated ten-package build and
+- [x] Run `rosdep install`, then perform a clean isolated ten-package build and
   the required eight-package test selection.
-- [ ] Require 0 build failures, 0 test errors, and 0 test failures; record any
-  intentional skips.
-- [ ] Reconfirm the installed `Rosmaster_Lib` SHA256 is
+- [x] Require 0 build failures, 0 test errors, and 0 test failures; after adding
+  the Astra launch regression test, the result was 66 tests, 0 errors, 0
+  failures, and 3 intentional skips.
+- [x] Reconfirm the installed `Rosmaster_Lib` SHA256 is
   `e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
 
 Do not edit code on the robot during acceptance. If a fix is required, stop the
@@ -107,14 +146,18 @@ Run `python3 tools/physical_contract_probe.py` from a second sourced shell.
 
 - [ ] The complete positive contract passes twice: once before motion and once
   after the lifted tests.
-- [ ] CPU use remains bounded with aligned 320x240 RGB-D and the colored cloud
+- [x] CPU use remains bounded with aligned 320x240 RGB-D and the colored cloud
   arrives consistently.
-- [ ] No default `/cmd_vel` publisher appears.
-- [ ] Camera absent: strict bringup exits after the startup deadline.
-- [ ] LiDAR absent: strict bringup exits clearly.
+- [x] No default `/cmd_vel` publisher appears.
+- [x] Camera absent: the adapter exited code 1 after 20.23 seconds with all five
+  required streams missing; the enclosing launch stopped every other node.
+- [x] LiDAR absent: `sllidar_node` reported error `80008004`, exited code 255,
+  and the enclosing launch immediately stopped every other node.
 - [ ] Motor feedback absent: driver/bringup exits after sustained failure.
 - [ ] After each absence test, restore the device and pass the full contract
-  before continuing.
+  before continuing. Camera restoration passed in 2.76 seconds. The LiDAR
+  identity and stable alias returned before an orderly poweroff, but its full
+  restoration contract and motor absence/restoration remain.
 
 Perform device-absence checks one at a time with power controlled safely. Never
 disconnect a motor-controller interface while a command source exists.
@@ -214,3 +257,12 @@ them as a new code change.
 PR #3 may leave draft only after every required physical gate passes. The new
 autostart routine remains a separate follow-up change after the platform is
 accepted; it must not be used to complete or bypass this runbook.
+
+That follow-up must branch from the exact accepted simulator-parity platform,
+not from the pre-cleanup tag, factory image scripts, or an old autostart commit.
+It should add versioned host/service and per-robot identity configuration, run
+the single strict platform launch in a failure-propagating foreground path,
+perform host/device/storage preflight checks, preserve logs, and stop
+gracefully. It must not start any command publisher or application behavior by
+default, and it requires its own reboot, failure-injection, and shutdown
+validation.

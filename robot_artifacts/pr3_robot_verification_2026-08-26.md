@@ -2,6 +2,20 @@
 
 Status: in progress; autostart and PR readiness remain blocked.
 
+Recovery note (2026-08-30): the ephemeral build/test logs, all seven launch
+directories, both successful contract-probe records, and all three current PR
+#3 bag databases were recovered read-only from the old full-card image. The
+older legacy probe bag was also recovered. Large payloads are under
+`/home/juan/rosmaster-evidence/2026-08-30`; hashes, provenance, database checks,
+and explicit limits are recorded in the
+[read-only recovery manifest](pr3_recovered_evidence_2026-08-30.md). The external
+1163-file manifest SHA256 is
+`e54f74067bbe469ca7067df66c8d38060c88353da0608041541b6231c23b60ef`.
+All four databases pass read-only SQLite integrity checks and open successfully
+with `ros2 bag info` in the recovered robot's ROS 2 Humble container. This
+recovery does not change the pass/fail interpretation below or accept the
+current PR head.
+
 Next session: follow
 [`docs/robot_side_next_moves.md`](../docs/robot_side_next_moves.md) from a clean
 current PR head. Resolve the charged, lifted-wheel gate before any further floor
