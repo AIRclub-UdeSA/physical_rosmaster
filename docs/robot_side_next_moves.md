@@ -55,7 +55,9 @@ its contents from metadata or silently count it as archived acceptance evidence.
 
 ## 2. Establish the host and safety baseline
 
-- [ ] Fully charge the robot battery and record rested voltage before launch.
+- [x] Fully charge the robot battery and record rested voltage before launch.
+  The charged 2026-08-31 repeat measured `11.400` V at idle; voltage under
+  motion load remains pending.
 - [ ] Record the observer, stop path, surface, payload, and how the lifted robot
   is restrained.
 - [x] Confirm `/root/auto_start.sh` is absent, the external container starts only
@@ -77,14 +79,21 @@ its contents from metadata or silently count it as archived acceptance evidence.
   the container.
 - [x] Confirm Astra serial `ACRC64300ET` through the pinned camera driver's
   device-discovery path before strict bringup.
-- [ ] Reboot with all devices connected and confirm that both Astra functions
-  (`2bc5:060f` depth and `2bc5:050f` UVC/RGB) enumerate without hotplug. Repeat
-  near the established `11.3` V almost-full baseline before attributing the
-  current depth-enumeration failure to software or accepting a workaround.
+- [x] Reboot with all devices connected and confirm that both Astra functions
+  (`2bc5:060f` depth and `2bc5:050f` UVC/RGB) enumerate without hotplug. At the
+  charged baseline, moving only the camera from a direct Pi USB 3 port to
+  downstream port 4 of the powered Yahboom hub produced one successful cold
+  boot and three consecutive successful warm reboots. Both functions remained
+  under parent `1-1.4` as `1-1.4.1` and `1-1.4.2`; the pinned driver found the
+  single expected Astra serial `ACRC64300ET`. The earlier direct-Pi-port failure
+  remains a rejected topology, not an accepted hotplug workaround.
 
 The motor alias depends on physical USB topology because its CH340 exposes no
 serial. Stop if `KERNELS=="1-1.2"` does not identify the dedicated controller
 port after reboot.
+
+Keep the camera on Yahboom hub downstream port 4. Moving it back to a direct Pi
+port or changing the motor-controller port reopens the stable-identity gate.
 
 Do not resume motion if the charged system returns to the previous `10.2` to
 `10.3` V condition. Inspect the battery, charger, controller supply, and voltage
@@ -111,9 +120,12 @@ git rev-parse origin/platform/simulator-parity
 ```
 
 - [x] `git status --porcelain` is empty.
-- [x] Local `HEAD` equals `origin/platform/simulator-parity`. The workstation,
-  last-verified clean robot checkout, and server branch resolve to
-  `55caf7a2a572aae0ad2682e265147c46e525921c` with local divergence `0 0`.
+- [x] The robot `HEAD` equals its cached `origin/platform/simulator-parity` at
+  `55caf7a2a572aae0ad2682e265147c46e525921c`, with an empty worktree. The
+  workstation and server branch now resolve to
+  `3a99fb5f6665f50cf811262fb2c2dc1893895aed`; the intervening commits change
+  documentation and evidence only, so the runtime source under test remains
+  exact `55caf7a` content.
 - [x] Record source-under-test hash
   `55caf7a2a572aae0ad2682e265147c46e525921c`.
 - [x] Confirm `physical_rosmaster.repos` still resolves the pinned Astra commit
@@ -145,24 +157,57 @@ ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
 Run `python3 tools/physical_contract_probe.py` from a second sourced shell.
 
 - [ ] The complete positive contract passes twice: once before motion and once
-  after the lifted tests.
+  after the lifted tests. The pre-motion half is complete at clean runtime head
+  `55caf7a`: both the default five-sample and extended 30-sample probes passed
+  every required topic, with `/tf_static=2` and zero `/cmd_vel` publishers. The
+  required post-motion repeat remains.
 - [x] CPU use remains bounded with aligned 320x240 RGB-D and the colored cloud
-  arrives consistently.
+  arrives consistently. The latest 30-second cloud check ended at `16.127` Hz
+  after 27 rolling averages from `8.616` to `23.435` Hz; total container CPU was
+  `80.72--87.34%`, adapter CPU `46.3--46.5%`, memory `340.3--346.0` MiB,
+  temperature `48.3` C, and throttling `0x0`.
 - [x] No default `/cmd_vel` publisher appears.
 - [x] Camera absent: the adapter exited code 1 after 20.23 seconds with all five
   required streams missing; the enclosing launch stopped every other node.
 - [x] LiDAR absent: `sllidar_node` reported error `80008004`, exited code 255,
   and the enclosing launch immediately stopped every other node.
-- [ ] Motor feedback absent: driver/bringup exits after sustained failure.
+- [x] Motor feedback absent at startup: with the physical controller and its
+  alias absent before launch, the driver exited with code 1 and the enclosing
+  strict bringup stopped every other node. The shutdown also reproduced the
+  partially initialized driver destructor `AttributeError`, Astra exit `-6`,
+  and LiDAR teardown findings; track those separately from the successful
+  startup fail-closed result.
+- [ ] Live motor-controller loss fails closed. Runtime head `55caf7a` fails this
+  gate: after the physical controller disappeared, the Rosmaster receive thread
+  raised `SerialException`, but the driver stayed alive, diagnostics remained
+  level `OK`/healthy with zero failure counters, and cached `/joint_states`,
+  `/voltage`, and `/vel_raw` continued to look fresh. No command publisher was
+  present, but stale healthy feedback is not acceptable.
 - [ ] After each absence test, restore the device and pass the full contract
-  before continuing. Camera restoration passed in 2.76 seconds. The LiDAR
-  identity and stable alias returned before an orderly poweroff, but its full
-  restoration contract and motor absence/restoration remain.
+  before continuing. Camera, LiDAR, and startup-motor restoration have passed
+  the full positive contract. The motor identity and passive zero telemetry
+  returned after the live-loss shutdown, but its post-fix full-contract repeat
+  remains, so this aggregate item stays unchecked.
 
 Perform device-absence checks one at a time with power controlled safely. Never
 disconnect a motor-controller interface while a command source exists.
 
+The current motor driver does not detect sustained live controller loss, and
+the contract probe can continue receiving falsely fresh controller-derived
+topics.
+Stop here on runtime `55caf7a`. Do not start any motion, joystick, keyboard,
+calibration, watchdog, or floor gate until a versioned freshness/device-loss fix
+has passed clean build/test, deployment, startup absence, live disconnect, and
+restoration tests.
+
 ## 5. Resolve the weak and uneven lifted-wheel response
+
+This entire section is blocked by the live motor-controller-loss failure on
+runtime `55caf7a`.
+
+During the post-hub strict no-command bringup, two contract probes, and sensor
+soak, the operator observed no wheel movement. This establishes quiet startup
+only; it does not replace the lifted command-response tests below.
 
 The previous lifted run established the expected signs but did not establish
 usable motion quality. At `10.2` to `10.3` V, wheel response was strongly uneven
@@ -211,6 +256,10 @@ predictable clean stop, but they do not explain uneven wheel motion.
 
 ## 6. Complete operator-tool safety
 
+Joystick, keyboard, calibration, and watchdog testing are blocked by the live
+motor-controller-loss failure until the fixed driver passes the Section 4
+disconnect and restoration gates.
+
 Run one command source at a time with the wheels lifted:
 
 - [ ] Joystick moves only while the configured deadman is held.
@@ -224,6 +273,9 @@ Run one command source at a time with the wheels lifted:
   timeout.
 
 ## 7. Perform measured floor acceptance
+
+Floor testing is blocked by the live motor-controller-loss failure and by all
+remaining lifted-motion and operator-tool gates.
 
 Use a clear level area, a human observer, the tested stop path, one command
 publisher, conservative bounds, and an external distance/heading measurement.

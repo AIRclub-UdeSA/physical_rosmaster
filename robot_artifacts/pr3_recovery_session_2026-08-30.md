@@ -1,9 +1,13 @@
 # PR #3 `x3-c` recovery and validation session: 2026-08-30
 
 Status: documentation, read-only evidence preservation, fresh-host recovery,
-stable device setup, exact source deployment, dependency restoration, clean
-build, and isolated tests complete. Strict platform bringup, fail-closed tests,
-and all motion remain pending.
+stable device rules, exact source deployment, dependency restoration, clean
+build, isolated tests, charged reboot-stable Astra enumeration in the accepted
+powered-hub topology, the strict pre-motion contract, all three startup-absence
+checks, and their restoration contracts are complete. Live motor-controller
+loss does not fail closed at runtime head `55caf7a`; all motion, operator tools,
+calibration, floor trials, and later acceptance gates are blocked pending a
+versioned driver freshness/device-loss fix and full regression repeat.
 
 This is the durable session record for continuing the `x3-c` host recovery and
 PR #3 validation. The workstation repository is the source of truth. The robot
@@ -700,6 +704,228 @@ public Rosmaster_Lib 3.3.9 hash still matched. The camera boot test must be
 repeated near the established `11.3` V almost-full baseline before treating
 power margin as either the cause or an excluded condition.
 
+### Fully charged Astra cold/warm-reboot repeat
+
+This repeat was performed on 2026-08-31 workstation time (2026-09-01
+robot-local time). The operator confirmed that the robot was fully charged. No
+ROS launch or command publisher was started.
+
+The workstation was clean at
+`3a99fb5f6665f50cf811262fb2c2dc1893895aed`, equal to
+`origin/platform/simulator-parity`. The robot checkout remained clean at
+`55caf7a2a572aae0ad2682e265147c46e525921c`, equal to its cached origin, with
+the pinned Astra source clean at
+`f7e71d9ce806e788cb48d8580aac2c778fba4214`. The intervening repository changes
+are documentation and evidence only. No source transfer, build, or ROS runtime
+test was attempted after the hardware gate failed.
+
+The physical-power cold boot used boot ID
+`ba533f92-1cf7-4781-a785-463d638b2f9d`. The host reached systemd state
+`running` with zero failed units, root usage 59%, Pi throttling flags `0x0`, and
+CPU temperature 38.9 C. The container ran only its persistent `bash` process.
+No legacy Rosmaster process, ROS process, device owner, or listener on ports
+6000/6500 was present.
+
+All required hardware initially enumerated:
+
+```text
+motor:       1a86:7523; /dev/robot/motor; topology 1-1.2
+LiDAR:       10c4:ea60; serial 0001; /dev/robot/lidar
+Astra depth: 2bc5:060f; /dev/astradepth; hub child 3-1.1
+Astra RGB:   2bc5:050f; /dev/astrauvc; hub child 3-1.2
+```
+
+The stable aliases and permissions were visible both on the host and inside the
+container, and no process owned any device. A streamed copy of the corrected
+passive probe confirmed Rosmaster_Lib SHA256
+`e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
+Five samples reported zero controller motion, stable encoder values
+`0/3/0/71`, and `11.400` V.
+
+The preceding boot had ended through systemd poweroff, filesystem sync, and
+`Journal stopped`, but this physical-power boot again renamed `system.journal`
+as corrupted or uncleanly shut down. Both the renamed file and its replacement
+passed `journalctl --verify`. The ext4 state was clean, and no current kernel
+MMC, ext4, I/O, corruption, undervoltage, or throttling error was found.
+
+A controlled software reboot then produced boot ID
+`2bfd6c71-913b-4583-b2ba-da114c665606`. Its preceding journal again ended
+through sync and `Journal stopped`, and this reboot did not rename another
+journal. The motor and LiDAR aliases returned despite changed tty numbering,
+and Astra RGB `2bc5:050f` returned, but Astra depth `2bc5:060f` and
+`/dev/astradepth` did not.
+
+The successful cold boot had logged depth enumeration at hub child `3-1.1`.
+The failed warm boot contained no enumeration attempt or USB error for that
+child. The corresponding sysfs port reported `state: not attached`,
+`disable: 0`, and `over_current_count: 0`; its hub status had power but no
+connect indication. The depth function remained absent after several minutes.
+A second passive probe still reported zero motion, stable encoder data,
+`11.400` V, and the expected library hash. Thus the charged repeat reproduces
+the reboot-stability failure; controller battery voltage does not establish the
+camera's USB 5 V margin or identify the cause.
+
+The Pi's effective boot power properties reported `max_current=5000`,
+`usb_max_current_enable=1`, `usb_over_current_detected=0`, and `power_reset=0`.
+The PMIC reported `EXT5V_V=5.15632` V, while Pi throttling flags remained `0x0`.
+These observations exclude the Pi's low downstream-current mode and a detected
+boot over-current from this run, but they do not prove voltage or inrush margin
+at the camera.
+
+As a diagnostic only, after confirming no ROS process or device owner, the
+logical depth port
+`/sys/bus/usb/devices/3-1:1.0/3-1-port1/disable` was toggled at
+`2026-09-01T05:15:48+08:00`. Before the toggle, parent hub `05e3:0608` and RGB
+`2bc5:050f` were present while depth `2bc5:060f` was absent. The port was
+disabled for three seconds, re-enabled, and polled for ten seconds. Its state
+remained `not attached`; neither `2bc5:060f` nor `/dev/astradepth` returned,
+and no matching USB event appeared in the five-minute post-reset kernel journal
+tail. The port was left enabled (`disable: 0`). RGB, motor, and LiDAR remained
+present and unowned, and no ROS process was running.
+
+This logical-port reset failed to recover the missing function and is not an
+acceptance mechanism. The stable hardware-identity gate remains failed. In
+accordance with the required gate order, source deployment, strict bringup,
+LiDAR restoration, motor-absence testing, and all motion were not continued.
+Acceptance still requires both Astra functions to enumerate across charged,
+all-connected boots without operator hotplug.
+
+### Powered-hub topology and charged reboot-stability acceptance
+
+After an orderly shutdown and confirmed network disappearance, the operator
+moved only the Astra camera cable from the Raspberry Pi's direct blue USB 3 port
+to downstream port 4 of the powered Yahboom USB hub. The LiDAR,
+motor-controller USB connection, hub upstream connection, and power wiring were
+left unchanged. The camera was not hotplugged while the host was running.
+
+The resulting topology passed one physical-power cold boot followed by three
+consecutive controlled warm reboots without a cable touch or manual USB
+recovery:
+
+```text
+cold:   6420178c-34ba-45ec-bc5f-2a6c6007515b
+warm 1: 5ceff18b-82c3-4941-b0cc-05559a255826
+warm 2: 18f096d6-22e0-4d04-aed5-9b86ac0a1895
+warm 3: ddc99ce4-9bd0-4080-af34-2a78f8aea610
+```
+
+On all four boots, the CH340 motor controller remained at topology `1-1.2`
+with `/dev/robot/motor`, the CP2102 LiDAR remained at `3-2` with
+`/dev/robot/lidar`, and both Astra functions returned through the camera's
+internal hub at `1-1.4`: depth `2bc5:060f` at `1-1.4.1` with
+`/dev/astradepth`, and RGB/UVC `2bc5:050f` at `1-1.4.2` with
+`/dev/astrauvc`. No USB fault or unplanned hotplug was observed. The pinned
+driver's discovery path found exactly one Astra and reported OpenNI serial
+`ACRC64300ET`.
+
+This closes the charged, all-connected reboot-stability gate for the
+powered-hub topology. The earlier direct-Pi-port failure remains a useful
+negative result: that topology lost depth on warm reboot and did not recover
+through a logical-port toggle. The camera must remain on Yahboom hub downstream
+port 4; moving it back to a direct Pi port reopens this gate.
+
+On the final warm boot, the robot repository and its cached
+`origin/platform/simulator-parity` were clean at runtime head
+`55caf7a2a572aae0ad2682e265147c46e525921c`; the pinned Astra repository was
+clean at `f7e71d9ce806e788cb48d8580aac2c778fba4214`. The workstation's later head
+`3a99fb5f6665f50cf811262fb2c2dc1893895aed` changes only documentation and
+evidence, so no runtime source differed from the previously built and tested
+`55caf7a` tree.
+
+With the robot securely lifted and no command source, strict manual bringup
+passed both the default five-sample physical contract and an extended
+30-sample repeat. Every required topic reached its required count in both runs,
+both received the two required `/tf_static` samples, and `/cmd_vel` had zero
+publishers. The operator directly observed that no wheel moved at any time
+during bringup, either contract probe, or the sensor soak.
+
+A separately bounded 30-second measurement of
+`/cam_1/depth/color/points` produced 27 rolling-average samples from `8.616` to
+`23.435` Hz and ended at `16.127` Hz. The command's exit status `124` was the
+expected result of its enclosing timeout, not a stream failure. During the
+strict run, total container CPU ranged from `80.72%` to `87.34%`; the Astra
+adapter ranged from `46.3%` to `46.5%`, used 10 total process threads with
+`OPENBLAS_NUM_THREADS=1`, and container memory ranged from `340.3` to `346.0`
+MiB. Final host temperature was `48.3` C and Pi throttling flags remained
+`0x0`.
+
+The requested shutdown again emitted the known Astra parameter-undeclare
+errors and required escalation to terminate the LiDAR process. These remain
+shutdown-quality findings. Afterward, the ROS graph was empty, no hardware
+device had an owner, and the container again ran only PID 1 `bash`. Five
+passive controller samples reported motion `0/0/0`, encoders `0/0/0/0`, and
+battery `11.1` V. The 52 KiB run directory is
+`/root/rosmaster-recovery-evidence/pr3-2026-09-01-55caf7a-post-hub-positive`;
+its cloud-rate record has SHA256
+`a93e81c3efb9326588e6d1f081628e471b511bbbe8cecfdf9a84decc2052a3d0`.
+
+### Motor startup absence, restoration, and live-loss failure
+
+All motor checks used the accepted powered-hub camera topology, the clean robot
+runtime and cached origin at
+`55caf7a2a572aae0ad2682e265147c46e525921c`, and the clean pinned Astra source at
+`f7e71d9ce806e788cb48d8580aac2c778fba4214`. No command source was started;
+`/cmd_vel` had zero publishers throughout. All `/root/rosmaster-recovery-evidence`
+paths in this section are local to the `rosmaster_humble` container.
+
+The startup-absence gate passed. With the physical motor controller and
+`/dev/robot/motor` absent before launch, the driver exited with code 1 and the
+enclosing strict launch stopped every other node. Teardown reproduced the
+partially initialized driver destructor `AttributeError` and also recorded
+Astra exit `-6` and LiDAR teardown findings. These remain separate cleanup
+defects and do not change the startup fail-closed result. Evidence is under
+`/root/rosmaster-recovery-evidence/pr3-2026-09-01-55caf7a-fail-motor`.
+
+After reconnection, the CH340 controller returned at exact topology `1-1.2` and
+the stable motor alias returned. The strict five-sample physical contract
+passed, followed by five passive controller samples reporting motion `0/0/0`;
+the operator observed no physical wheel movement. This closes restoration for
+the startup-absence test. Evidence is under
+`/root/rosmaster-recovery-evidence/pr3-2026-09-01-55caf7a-restore-after-motor`.
+
+The live-loss gate then failed. The strict graph and motor feedback were healthy
+before the controller was physically removed. The CH340 device and
+`/dev/robot/motor` disappeared, and the Rosmaster receive thread raised a
+`SerialException`, but the driver process stayed alive. Its diagnostics falsely
+remained level `OK`/healthy with failure counters at zero; `/joint_states`
+continued at approximately 10 Hz, `/voltage` continued reporting the cached
+`11.0` V value, and `/vel_raw` continued reporting zeros. The same publish path
+also restamped the other controller-derived telemetry after the live hardware
+loss.
+
+The concurrent physical contract probe accumulated its required dynamic message
+counts but ultimately failed a camera TF lookup. That invocation is not a full
+contract pass. Its continued motor-message counts are evidence of the stale-data
+defect, not evidence that the disconnected controller was healthy. The operator
+observed no wheel movement during the live unplug or shutdown. Evidence is under
+`/root/rosmaster-recovery-evidence/pr3-2026-09-01-55caf7a-fail-motor-live`.
+The decisive `diagnostics_after_disconnect.txt` and
+`joint_states_hz_after_disconnect.txt` records have SHA256
+`d60ac4a63bf0e51d0445bf7ab132187c260207be7099a4b4c3adf607b4e49600` and
+`620c07ae7bf1117220708f9ff7ff27d0a6d45a10af77bf4400ede18ed1870df4`,
+respectively.
+
+After shutdown and final reconnection, the controller returned as USB node
+`1-1.2` (`1a86:7523`) with `/dev/robot/motor` resolving to `/dev/ttyUSB0`. The
+passive public Rosmaster_Lib 3.3.9 probe matched SHA256
+`e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c` and
+reported five samples with motion `0/0/0`, encoders `0/0/0/0`, and battery
+`11.0` V. The operator observed no wheel movement during reconnection or the
+probe. No process owned a hardware device afterward, and the container again
+ran only PID 1 `bash`. A full post-live-loss restoration contract was not run
+because the live fail-closed gate had already failed. After this safe idle and
+device-release state was verified, the operator later reported the robot
+powered off. This records the final power state, not an additional validation
+of the host shutdown sequence.
+
+This is a hard pre-motion failure at runtime `55caf7a`. Acceptance requires a
+versioned driver change that invalidates and suppresses cached
+controller-derived telemetry, reports non-OK diagnostics, and exits strict
+bringup after sustained device loss. The fixed committed revision must pass
+clean build/test and exact deployment followed by the positive contract,
+startup absence, live disconnect, and restoration gates before any motion,
+joystick, keyboard, calibration, watchdog, or floor test.
+
 ## Documentation created in this phase
 
 - [`systemd` SIGILL incident](../docs/troubleshooting/incidents/2026-08-29-x3-c-host-systemd-sigill.md)
@@ -723,19 +949,28 @@ backup, and storage controls are documented separately from causal claims.
   `rosmaster.desktop` autostart; reboot-verify that it, its ports, and its
   controller ownership do not return.
 - [x] Establish a charged idle battery baseline and enumerate the motor, LiDAR,
-  and Astra together before restoration or build work. Full-charge/load voltage
-  remains pending before motion.
+  and Astra together before restoration or build work. The charged repeat
+  measured `11.400` V at idle; voltage under motion load remains pending.
 - [x] Restore and verify `Rosmaster_Lib`.
-- [x] Fast-forward the remote PR branch to tested head `55caf7a` and record
-  local/robot/remote equality. The clean runtime build and 66-test pass are
-  complete for this content.
-- [ ] Re-establish and reboot-verify stable hardware identities. The pinned
-  driver confirmed Astra OpenNI serial `ACRC64300ET`, but the depth function
-  subsequently failed to enumerate across reboot without a camera-hub reseat.
-- [ ] The pre-motion strict positive contract passed at published head `55caf7a`;
-  camera and LiDAR fail-closed checks passed, camera restoration passed the
-  full contract, LiDAR re-enumeration passed, and the LiDAR restoration
-  contract, motor absence/restoration, and required post-motion repeat remain.
+- [x] Publish tested runtime head `55caf7a` and retain exact clean robot runtime
+  content. The later workstation/server head `3a99fb5` adds documentation and
+  evidence only; the clean runtime build and 66-test pass remain applicable.
+- [x] Re-establish and reboot-verify stable hardware identities. With the camera
+  on powered Yahboom hub downstream port 4, all four required identities and
+  aliases survived one charged cold boot and three consecutive warm reboots;
+  the pinned driver found exactly one Astra, serial `ACRC64300ET`.
+- [x] Pass the pre-motion strict positive contract at runtime head `55caf7a`.
+  The latest default five-sample and extended 30-sample probes both passed with
+  no `/cmd_vel` publisher.
+- [x] Pass camera, LiDAR, and motor-controller startup-absence checks and restore
+  the full contract after each. Motor startup absence exited code 1 and stopped
+  the enclosing launch; its restored five-sample contract passed with no
+  observed wheel movement.
+- [ ] Pass live motor-controller loss and its full restoration contract. Runtime
+  `55caf7a` falsely kept the driver healthy and published cached
+  controller-derived data after physical disconnect, so this is the controlling
+  hard failure.
+- [ ] Repeat the full positive contract after the charged lifted-motion tests.
 - [ ] Pass charged lifted motion and operator-tool safety gates.
 - [ ] Pass repeated measured floor trials.
 - [ ] Prove unchanged simulator/physical consumer parity.
@@ -749,14 +984,21 @@ backup, and storage controls are documented separately from causal claims.
 - Do not mount the old image read-write or run a repair against it.
 - Do not delete the old image or container metadata archive.
 - Do not enable autostart while any PR #3 physical gate remains incomplete.
+- Do not publish motion or start joystick, keyboard, calibration, watchdog, or
+  floor tests on runtime `55caf7a`; its live controller-loss behavior is unsafe
+  for acceptance.
 - Stop at a failed gate; do not weaken strict checks or make an uncommitted
   robot-only fix count as evidence.
 
 ## Next phase
 
-After the next power-on, verify this session's clean shutdown and re-establish
-the idle device/graph baseline. Keep all command publishers and legacy services
-disabled. Pass the full positive contract with the restored LiDAR, then perform
-the motor-absence check and its restoration contract. Do not begin motion as
-part of these checks. Remote publication of tested head `55caf7a` is complete;
-do not rewrite that head while acceptance remains in progress.
+Keep the camera on Yahboom hub downstream port 4 and leave autostart disabled.
+Implement and review a versioned driver fix that stops publishing cached
+controller-derived telemetry, reports non-OK diagnostics, and exits strict
+bringup after sustained live controller loss. Clean-build and test the new
+committed head, deploy that exact revision, then repeat the positive contract,
+startup motor absence, live motor disconnect, and restoration contract before
+any motion. Only after all four pass may charged lifted pulses, watchdog,
+operator tools, calibration, or floor trials resume. Track the driver destructor
+error, Astra shutdown errors, and LiDAR teardown escalation as separate
+unresolved shutdown-quality findings.
