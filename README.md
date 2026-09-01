@@ -88,7 +88,10 @@ for this architecture yet.
 
 ## Workstation setup
 
-The target runtime remains ROS 2 Humble inside the robot container. A workstation can review, test, and build with a compatible ROS 2 environment.
+The target runtime remains ROS 2 Humble inside the robot container. A
+workstation can review, test, and build with a compatible ROS 2 environment.
+The `vcs` command must already be available; Ubuntu provides it in
+`python3-vcstool`.
 
 ```bash
 mkdir -p ~/rosmaster_physical_ws/src
@@ -131,18 +134,30 @@ colcon test-result --verbose
 cd src/physical_rosmaster
 export PYTHONPATH="$PWD/yahboomcar_bringup:$PWD/tools:$PYTHONPATH"
 python3 -m pytest -q \
-  yahboomcar_bringup/test/test_rosmaster_transport.py \
-  yahboomcar_bringup/test/test_x3_driver_utils.py \
-  yahboomcar_bringup/test/test_x3_driver_feedback.py \
-  yahboomcar_bringup/test/test_x3_launch.py \
+  tools/test_rosmaster_lib_probe.py \
   tools/test_motor_live_loss_probe.py \
+  tools/test_motor_live_loss_ros_smoke.py \
   tools/test_physical_contract_probe.py \
   tools/test_safe_cmd_vel_pulse.py
 ```
 
-The explicit plugin setting isolates these checks from an incompatible global
+`colcon test` already runs every test in the selected repository packages,
+including the motor transport, driver, and strict-launch suites. The direct
+pytest command therefore runs only the standalone source-tree tools. The
+explicit plugin setting isolates these checks from an incompatible global
 pytest plugin installed on the current workstation; it is not a robot runtime
-setting. ROS tests also need a writable `ROS_LOG_DIR`.
+setting. ROS tests also need a writable
+`ROS_LOG_DIR`. The live-loss ROS smoke test must run on Linux with permission
+to enumerate local network interfaces and open localhost DDS sockets.
+
+When the exact reviewed vendor source is available on the workstation, exercise
+it through real pyserial and a pseudo-terminal as a separate compatibility
+gate. The file remains external because `Rosmaster_Lib` is not vendored here:
+
+```bash
+export ROSMASTER_V339_SOURCE=/absolute/path/to/Rosmaster_Lib.py
+python3 -m pytest -q tools/test_rosmaster_v339_pty.py
+```
 
 ## Robot setup and manual bringup
 

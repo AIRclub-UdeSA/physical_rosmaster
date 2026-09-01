@@ -1,6 +1,10 @@
 # Workstation and robot workflow
 
-Use the workstation for source changes, package inventory, dependency review, unit tests, Xacro expansion, launch construction, and builds. Use a robot for USB identity, udev, `Rosmaster_Lib`, camera calibration, real message quality, motion, and final contract acceptance.
+Use the workstation for source changes, package inventory, dependency review,
+unit tests, Xacro expansion, launch construction, and builds. Use a robot for
+USB identity, udev, `Rosmaster_Lib`, camera calibration, real message quality,
+motion, and final contract acceptance. Before importing sources, ensure that
+`vcs` is installed; Ubuntu provides it in `python3-vcstool`.
 
 ## Workstation
 
@@ -58,19 +62,29 @@ python3 -m compileall -q src/physical_rosmaster
 cd src/physical_rosmaster
 export PYTHONPATH="$PWD/yahboomcar_bringup:$PWD/tools:$PYTHONPATH"
 python3 -m pytest -q \
-  yahboomcar_bringup/test/test_rosmaster_transport.py \
-  yahboomcar_bringup/test/test_x3_driver_utils.py \
-  yahboomcar_bringup/test/test_x3_driver_feedback.py \
-  yahboomcar_bringup/test/test_x3_launch.py \
+  tools/test_rosmaster_lib_probe.py \
   tools/test_motor_live_loss_probe.py \
+  tools/test_motor_live_loss_ros_smoke.py \
   tools/test_physical_contract_probe.py \
   tools/test_safe_cmd_vel_pulse.py
 ```
 
-The current workstation has a globally installed pytest plugin that is
-incompatible with its pytest version, so these isolated checks disable plugin
-autoload explicitly. This is not a runtime setting. Keep `ROS_LOG_DIR` on a
-writable path for ROS launch and node tests.
+The package gate already runs the motor transport, driver, and launch tests;
+the direct pytest command contains only standalone source-tree tools. The
+current workstation has a globally installed pytest plugin that is incompatible
+with its pytest version, so these isolated checks disable plugin autoload
+explicitly. This is not a runtime setting. Keep `ROS_LOG_DIR` on a writable
+path for ROS launch and node tests.
+The live-loss ROS smoke test must run on Linux with permission to enumerate
+local network interfaces and open localhost DDS sockets.
+
+If the exact reviewed vendor source is available on the workstation, run the
+real-pyserial pseudo-terminal compatibility gate separately:
+
+```bash
+export ROSMASTER_V339_SOURCE=/absolute/path/to/Rosmaster_Lib.py
+python3 -m pytest -q tools/test_rosmaster_v339_pty.py
+```
 
 A complete build requires dependencies declared by the pinned Orbbec driver, including `camera_info_manager`, `image_transport`, `image_geometry`, `cv_bridge`, OpenCV, and its USB/OpenNI dependencies. Let `rosdep` resolve them for the target ROS distribution.
 

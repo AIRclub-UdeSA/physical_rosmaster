@@ -123,6 +123,29 @@ class TopicEvidence:
     last_post_loss_at: Optional[float] = None
 
 
+def _diagnostic_level_value(level: object) -> int:
+    """Normalize ROS Humble's one-byte diagnostic level representation."""
+    if isinstance(level, (bytes, bytearray, memoryview)):
+        encoded = bytes(level)
+        if len(encoded) != 1:
+            raise ValueError("diagnostic level must contain exactly one byte")
+        return encoded[0]
+    if isinstance(level, bool) or not isinstance(level, int):
+        raise ValueError("diagnostic level must be an integer or one byte")
+    parsed = level
+    if not 0 <= parsed <= 255:
+        raise ValueError("diagnostic level must be between 0 and 255")
+    return parsed
+
+
+def _is_expected_motor_diagnostic(status: object, hardware_id: str) -> bool:
+    """Match only the configured controller's exact diagnostic status."""
+    return (
+        getattr(status, "name", None) == MOTOR_DIAGNOSTIC_NAME
+        and getattr(status, "hardware_id", None) == hardware_id
+    )
+
+
 class LiveLossEvaluator:
     """Evaluate timestamped observations without ROS or hardware dependencies."""
 
@@ -132,6 +155,8 @@ class LiveLossEvaluator:
             raise ValueError("started_at must be finite")
         self.config = config
         self.started_at = started_at
+        self.last_event_at = started_at
+        self.baseline_started_at = started_at
         self.phase = ProbePhase.BASELINE
         self.outcome = "RUNNING"
         self.unsafe = False
@@ -140,7 +165,11 @@ class LiveLossEvaluator:
         self.healthy_since: Optional[float] = None
         self.armed_at: Optional[float] = None
         self.loss_at: Optional[float] = None
+        self.failure_started_at: Optional[float] = None
         self.error_at: Optional[float] = None
+        self.pending_error_at: Optional[float] = None
+        self.pending_error_evidence: Optional[Dict[str, object]] = None
+        self.accepted_error_evidence: Optional[Dict[str, object]] = None
         self.driver_gone_at: Optional[float] = None
         self.strict_zero_since: Optional[float] = None
         self.strict_drained_at: Optional[float] = None
@@ -182,6 +211,9 @@ class LiveLossEvaluator:
     def _check_time(self, now: float) -> None:
         if not math.isfinite(now) or now < self.started_at:
             raise ValueError("event time must be finite and not precede started_at")
+        if now < self.last_event_at:
+            raise ValueError("event time must be nondecreasing")
+        self.last_event_at = now
 
     def _fail(self, reason: str, now: float, unsafe: bool = False) -> None:
         self._check_time(now)
@@ -200,12 +232,77 @@ class LiveLossEvaluator:
         """Terminate an incomplete run with a machine-readable failure."""
         self._fail(reason, now, unsafe=unsafe)
 
+    def _failure_diagnostic_evidence(
+        self, message: str, values: Mapping[str, str], now: float
+    ) -> Dict[str, object]:
+        """Snapshot one qualifying diagnostic independently of later status."""
+        return {
+            "level": 2,
+            "at": now,
+            "message": str(message),
+            "values": {str(key): str(value) for key, value in values.items()},
+        }
+
+    def _accept_failure_diagnostic(
+        self, evidence: Mapping[str, object]
+    ) -> None:
+        """Retain the first confirmed terminal diagnostic and its payload."""
+        if self.error_at is not None:
+            return
+        self.error_at = float(evidence["at"])
+        self.accepted_error_evidence = {
+            "level": int(evidence["level"]),
+            "at": self.error_at,
+            "message": str(evidence["message"]),
+            "values": dict(evidence["values"]),
+        }
+
+    def _reset_pending_failure(self) -> None:
+        """Discard tentative evidence and require a wholly fresh baseline."""
+        self.phase = ProbePhase.BASELINE
+        self.healthy_since = None
+        self.armed_at = None
+        self.baseline_strict_topic_counts = None
+        self.pending_error_at = None
+        self.pending_error_evidence = None
+        self.failure_started_at = None
+        self.driver_gone_at = None
+        self.strict_zero_since = None
+        self.strict_drained_at = None
+        self.graph_seen = False
+        self.latest_graph_at = None
+        self.driver_endpoints_exact = False
+        self.driver_present = False
+        self.driver_endpoint_count = 0
+        self.strict_endpoint_count = 0
+        self.strict_topic_counts = {
+            topic: 0 for topic in STRICT_GRAPH_TOPICS
+        }
+        self.latest_graph_evidence = {}
+        self.stationary_topics_seen.clear()
+        if not (
+            self.latest_diagnostic_level == 0
+            and self.latest_baseline_freshness_valid
+        ):
+            self.baseline_freshness_evidence = None
+        for evidence in self.topics.values():
+            evidence.count = 0
+            evidence.last_at = None
+            evidence.post_loss_count = 0
+            evidence.last_post_loss_at = None
+
     def observe_device(self, present: bool, now: float) -> None:
         """Observe the stable motor alias and identify its present-to-absent edge."""
         self._check_time(now)
         if self.terminal:
             return
         previous = self.device_present
+        pre_edge_baseline_healthy = (
+            self.phase == ProbePhase.ARMED
+            and previous is True
+            and self.pending_error_at is None
+            and self._baseline_healthy(now)
+        )
         self.device_present = bool(present)
         self.device_was_present = self.device_was_present or bool(present)
 
@@ -213,8 +310,39 @@ class LiveLossEvaluator:
             if self.phase != ProbePhase.ARMED or previous is not True:
                 self._fail("motor device loss occurred before the probe armed", now)
                 return
+            if self.armed_at is None or (
+                now - self.armed_at > self.config.loss_wait_timeout
+            ):
+                self._fail("motor device was not removed before timeout", now)
+                return
+            pending_error_at = self.pending_error_at
+            pending_error_evidence = self.pending_error_evidence
+            if pending_error_at is not None:
+                lead = now - pending_error_at
+                if not 0.0 <= lead <= self.config.diagnostic_deadline:
+                    self._fail(
+                        "motor freshness ERROR was not followed by device loss "
+                        "within %.3fs" % self.config.diagnostic_deadline,
+                        now,
+                    )
+                    return
+            elif not pre_edge_baseline_healthy:
+                self._fail(
+                    "healthy baseline was lost before the motor device trigger",
+                    now,
+                )
+                return
             self.phase = ProbePhase.LOSS
             self.loss_at = now
+            if pending_error_at is not None:
+                if pending_error_evidence is None:
+                    self._fail("pending motor ERROR evidence was incomplete", now)
+                    return
+                self._accept_failure_diagnostic(pending_error_evidence)
+                self.pending_error_at = None
+                self.pending_error_evidence = None
+            else:
+                self.failure_started_at = now
             return
 
         if present and self.phase == ProbePhase.LOSS:
@@ -247,10 +375,10 @@ class LiveLossEvaluator:
         if topic in STATIONARY_TOPICS and stationary is True:
             self.stationary_topics_seen.add(topic)
 
-        if self.loss_at is not None and now >= self.loss_at:
+        if self.failure_started_at is not None and now >= self.failure_started_at:
             evidence.post_loss_count += 1
             evidence.last_post_loss_at = now
-            if now - self.loss_at > self.config.quiet_deadline:
+            if now - self.failure_started_at > self.config.quiet_deadline:
                 self._fail(
                     "%s published after the %.3fs quiet deadline"
                     % (topic, self.config.quiet_deadline),
@@ -259,7 +387,7 @@ class LiveLossEvaluator:
 
     def observe_motor_diagnostic(
         self,
-        level: int,
+        level: object,
         message: str,
         values: Mapping[str, str],
         now: float,
@@ -268,7 +396,8 @@ class LiveLossEvaluator:
         self._check_time(now)
         if self.terminal:
             return
-        self.latest_diagnostic_level = int(level)
+        diagnostic_level = _diagnostic_level_value(level)
+        self.latest_diagnostic_level = diagnostic_level
         self.latest_diagnostic_at = now
         self.latest_diagnostic_message = str(message)
         self.latest_diagnostic_values = {
@@ -281,7 +410,11 @@ class LiveLossEvaluator:
         )
         self.latest_baseline_freshness_errors = baseline_errors
         self.latest_baseline_freshness_valid = not baseline_errors
-        if int(level) == 0 and not baseline_errors and self.loss_at is None:
+        if (
+            diagnostic_level == 0
+            and not baseline_errors
+            and self.loss_at is None
+        ):
             self.baseline_freshness_evidence = {
                 "at": self._relative(now),
                 "message": str(message),
@@ -289,22 +422,67 @@ class LiveLossEvaluator:
                 "freshness_bound_seconds": self.config.feedback_freshness_bound,
             }
 
-        if self.loss_at is None or int(level) != 2:
-            return
-        elapsed = now - self.loss_at
-        failure_errors = _failure_freshness_errors(
-            str(message), self.latest_diagnostic_values
-        )
-        if failure_errors:
-            self.invalid_error_evidence.append(
-                {
-                    "at": self._relative(now),
-                    "message": str(message),
-                    "values": dict(self.latest_diagnostic_values),
-                    "validation_errors": failure_errors,
-                }
+        failure_errors = (
+            _failure_freshness_errors(
+                str(message), self.latest_diagnostic_values
             )
+            if diagnostic_level == 2
+            else []
+        )
+        qualifying_error = diagnostic_level == 2 and not failure_errors
+
+        if self.error_at is not None:
+            if not qualifying_error:
+                if failure_errors:
+                    self.invalid_error_evidence.append(
+                        {
+                            "at": self._relative(now),
+                            "message": str(message),
+                            "values": dict(self.latest_diagnostic_values),
+                            "validation_errors": failure_errors,
+                        }
+                    )
+                self._fail(
+                    "motor diagnostic contradicted the accepted terminal "
+                    "freshness ERROR",
+                    now,
+                )
             return
+
+        if not qualifying_error:
+            if diagnostic_level == 2 and failure_errors:
+                if self.loss_at is not None or self.phase == ProbePhase.ARMED:
+                    self.invalid_error_evidence.append(
+                        {
+                            "at": self._relative(now),
+                            "message": str(message),
+                            "values": dict(self.latest_diagnostic_values),
+                            "validation_errors": failure_errors,
+                        }
+                    )
+            if self.loss_at is None and self.pending_error_at is not None:
+                self._reset_pending_failure()
+            return
+
+        failure_evidence = self._failure_diagnostic_evidence(
+            str(message), self.latest_diagnostic_values, now
+        )
+        if self.loss_at is None:
+            if (
+                self.phase == ProbePhase.ARMED
+                and self.armed_at is not None
+                and now >= self.armed_at
+                and self.pending_error_at is None
+            ):
+                self.pending_error_at = now
+                self.pending_error_evidence = failure_evidence
+                self.failure_started_at = now
+            return
+
+        if self.failure_started_at is None:
+            self._fail("motor loss deadline anchor was not established", now)
+            return
+        elapsed = now - self.failure_started_at
         if elapsed > self.config.diagnostic_deadline:
             self._fail(
                 "motor freshness ERROR arrived after the %.3fs deadline"
@@ -312,8 +490,7 @@ class LiveLossEvaluator:
                 now,
             )
             return
-        if self.error_at is None:
-            self.error_at = now
+        self._accept_failure_diagnostic(failure_evidence)
 
     def observe_graph(
         self,
@@ -363,10 +540,10 @@ class LiveLossEvaluator:
             )
             return
 
-        if self.loss_at is None:
+        if self.failure_started_at is None:
             return
 
-        elapsed = now - self.loss_at
+        elapsed = now - self.failure_started_at
         driver_gone = not driver_present and driver_endpoint_count == 0
         if self.driver_gone_at is not None and not driver_gone:
             self._fail("driver graph evidence reappeared after exit", now)
@@ -375,7 +552,7 @@ class LiveLossEvaluator:
             self._fail("strict graph publishers reappeared after teardown", now)
             return
         if driver_gone and self.driver_gone_at is None:
-            if self.error_at is None:
+            if self.error_at is None and self.pending_error_at is None:
                 self._fail(
                     "driver disappeared before a freshness-specific ERROR was observed",
                     now,
@@ -444,7 +621,7 @@ class LiveLossEvaluator:
             return
 
         if self.phase == ProbePhase.BASELINE:
-            if now - self.started_at > self.config.baseline_timeout:
+            if now - self.baseline_started_at > self.config.baseline_timeout:
                 self._fail("healthy baseline was not established before timeout", now)
                 return
             if self._baseline_healthy(now):
@@ -461,22 +638,39 @@ class LiveLossEvaluator:
             return
 
         if self.phase == ProbePhase.ARMED:
+            if self.armed_at is not None and (
+                now - self.armed_at > self.config.loss_wait_timeout
+            ):
+                self._fail("motor device was not removed before timeout", now)
+                return
+            if self.pending_error_at is not None:
+                pending_age = now - self.pending_error_at
+                if pending_age <= self.config.diagnostic_deadline:
+                    # The serial receive failure can precede removal of the
+                    # udev alias.  Allow that bounded ordering window without
+                    # requiring an impossible OK diagnostic in between.
+                    return
+                self._fail(
+                    "motor freshness ERROR was not followed by device loss "
+                    "within %.3fs" % self.config.diagnostic_deadline,
+                    now,
+                )
+                return
             if not self._baseline_healthy(now):
                 self._fail(
                     "healthy baseline was lost before the motor device trigger",
                     now,
                 )
                 return
-            if self.armed_at is not None and (
-                now - self.armed_at > self.config.loss_wait_timeout
-            ):
-                self._fail("motor device was not removed before timeout", now)
             return
 
         if self.phase != ProbePhase.LOSS or self.loss_at is None:
             return
 
-        elapsed = now - self.loss_at
+        if self.failure_started_at is None:
+            self._fail("motor loss deadline anchor was not established", now)
+            return
+        elapsed = now - self.failure_started_at
         if self.error_at is None and elapsed > self.config.diagnostic_deadline:
             self._fail(
                 "no freshness-specific motor ERROR within %.3fs"
@@ -503,6 +697,7 @@ class LiveLossEvaluator:
         if (
             quiet_window_observed
             and self.error_at is not None
+            and self.accepted_error_evidence is not None
             and self.driver_gone_at is not None
             and self.strict_drained_at is not None
         ):
@@ -532,7 +727,9 @@ class LiveLossEvaluator:
             ),
             "config": asdict(self.config),
             "timing_offsets_seconds": {
+                "baseline_started": self._relative(self.baseline_started_at),
                 "armed": self._relative(self.armed_at),
+                "failure_started": self._relative(self.failure_started_at),
                 "device_loss": self._relative(self.loss_at),
                 "freshness_error": self._relative(self.error_at),
                 "driver_gone": self._relative(self.driver_gone_at),
@@ -556,6 +753,18 @@ class LiveLossEvaluator:
                     self.latest_baseline_freshness_errors
                 ),
             },
+            "accepted_failure_diagnostic": (
+                {
+                    "level": self.accepted_error_evidence["level"],
+                    "at": self._relative(
+                        float(self.accepted_error_evidence["at"])
+                    ),
+                    "message": self.accepted_error_evidence["message"],
+                    "values": dict(self.accepted_error_evidence["values"]),
+                }
+                if self.accepted_error_evidence is not None
+                else None
+            ),
             "invalid_error_evidence": list(self.invalid_error_evidence),
             "baseline_freshness_evidence": (
                 dict(self.baseline_freshness_evidence)
@@ -568,6 +777,10 @@ class LiveLossEvaluator:
                     "last_at": self._relative(evidence.last_at),
                     "post_loss_count": evidence.post_loss_count,
                     "last_post_loss_at": self._relative(
+                        evidence.last_post_loss_at
+                    ),
+                    "post_failure_count": evidence.post_loss_count,
+                    "last_post_failure_at": self._relative(
                         evidence.last_post_loss_at
                     ),
                 }
@@ -857,7 +1070,7 @@ def _run_ros(args: argparse.Namespace) -> Tuple[int, Dict[str, object]]:
     def observe_diagnostics(message: DiagnosticArray) -> None:
         now = time.monotonic()
         for status in message.status:
-            if status.name != MOTOR_DIAGNOSTIC_NAME:
+            if not _is_expected_motor_diagnostic(status, args.device):
                 continue
             values = {item.key: item.value for item in status.values}
             evaluator.observe_motor_diagnostic(
@@ -922,13 +1135,14 @@ def _run_ros(args: argparse.Namespace) -> Tuple[int, Dict[str, object]]:
     try:
         while rclpy.ok() and not evaluator.terminal:
             rclpy.spin_once(node, timeout_sec=0.05)
-            now = time.monotonic()
-            evaluator.observe_device(os.path.exists(args.device), now)
+            device_now = time.monotonic()
+            evaluator.observe_device(os.path.exists(args.device), device_now)
             if evaluator.terminal:
                 break
             snapshot = _graph_snapshot(node, args.driver_node)
-            evaluator.observe_graph(now=now, **snapshot)
-            evaluator.tick(now)
+            graph_now = time.monotonic()
+            evaluator.observe_graph(now=graph_now, **snapshot)
+            evaluator.tick(graph_now)
             if evaluator.phase != previous_phase:
                 if evaluator.phase == ProbePhase.ARMED:
                     print(

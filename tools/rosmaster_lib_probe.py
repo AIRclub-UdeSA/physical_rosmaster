@@ -239,10 +239,18 @@ def main() -> int:
         return 2
 
     try:
-        print_source_report(rosmaster_class)
+        supported_source = print_source_report(rosmaster_class)
     except Exception as exc:
         print(
             f"ERROR: failed to inspect Rosmaster source: {exc}",
+            file=sys.stderr,
+        )
+        return 2
+
+    if not supported_source:
+        print(
+            "ERROR: unsupported Rosmaster_Lib source; expected SHA256 "
+            f"{PUBLIC_V3_3_9_SHA256}",
             file=sys.stderr,
         )
         return 2

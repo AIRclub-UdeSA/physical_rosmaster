@@ -12,7 +12,7 @@ when more people run it, validate it carefully, and document what they find.
 There are two separate contexts, and most contributions only need the first:
 
 - **Workstation** — source review, Git work, documentation, hardware-free
-  tests:
+  tests. Install `python3-vcstool` first if the `vcs` command is unavailable:
 
   ```bash
   mkdir -p ~/rosmaster_physical_ws/src
@@ -27,8 +27,9 @@ There are two separate contexts, and most contributions only need the first:
   source install/setup.bash
   ```
 
-  Run the package gate from the workspace, followed by focused runtime and tool
-  checks from the repository root:
+  Run the package gate from the workspace, followed by the standalone tool
+  checks from the repository root. Package tests, including the motor runtime
+  suites, run once through `colcon test`:
 
   ```bash
   cd ~/rosmaster_physical_ws
@@ -46,11 +47,9 @@ There are two separate contexts, and most contributions only need the first:
   cd ~/rosmaster_physical_ws/src/physical_rosmaster
   export PYTHONPATH="$PWD/yahboomcar_bringup:$PWD/tools:$PYTHONPATH"
   python3 -m pytest -q \
-    yahboomcar_bringup/test/test_rosmaster_transport.py \
-    yahboomcar_bringup/test/test_x3_driver_utils.py \
-    yahboomcar_bringup/test/test_x3_driver_feedback.py \
-    yahboomcar_bringup/test/test_x3_launch.py \
+    tools/test_rosmaster_lib_probe.py \
     tools/test_motor_live_loss_probe.py \
+    tools/test_motor_live_loss_ros_smoke.py \
     tools/test_physical_contract_probe.py \
     tools/test_safe_cmd_vel_pulse.py
   ```
@@ -58,6 +57,16 @@ There are two separate contexts, and most contributions only need the first:
   The current workstation needs plugin autoload disabled because an unrelated
   globally installed pytest plugin is incompatible with its pytest version.
   ROS tests also require a writable `ROS_LOG_DIR`.
+  The live-loss ROS smoke test must run on Linux with permission to enumerate
+  local network interfaces and open localhost DDS sockets.
+
+  If the exact reviewed `Rosmaster_Lib.py` is available locally, also run its
+  real-pyserial pseudo-terminal gate without copying it into the repository:
+
+  ```bash
+  export ROSMASTER_V339_SOURCE=/absolute/path/to/Rosmaster_Lib.py
+  python3 -m pytest -q tools/test_rosmaster_v339_pty.py
+  ```
 
 - **Robot** — inside the robot's `rosmaster_humble` Docker container, cloned
   into `/root/yahboomcar_ws/src/physical_rosmaster`. See

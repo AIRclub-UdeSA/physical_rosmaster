@@ -16,6 +16,8 @@ until the final gate passes.
 - Existing source and generated-state backups are outside
   `/root/yahboomcar_ws`.
 - Host autostart is disabled while validation is in progress.
+- The `vcs` command is available in the container (`python3-vcstool` on
+  Ubuntu).
 
 If an old service is active, stop it using the robot's existing administration
 procedure before opening serial devices manually.
