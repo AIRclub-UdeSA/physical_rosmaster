@@ -35,12 +35,19 @@ Stop the test and leave autostart blocked if any of these occurs:
 - strict bringup continues with a missing required sensor;
 - default bringup has a `/cmd_vel` publisher;
 - encoder signs, motion direction, watchdog behavior, or stop behavior is wrong;
-- lifted active-link loss does not demonstrate a bounded physical stop and no
-  validated controller/firmware or independent hardware watchdog is present;
 - `/odom`, TF, sensor frames, camera calibration, metric depth, or diagnostics
   fail the physical contract;
 - any command source remains active unexpectedly or the operator loses a safe
   stop path.
+
+A lifted active-link-loss trial not demonstrating bounded physical stop was
+a stop condition here until 2026-09-02. It was tested on `x3-c`, did not pass,
+and was root-caused to a protocol-level absence of any command-loss watchdog
+in the motor controller. The project owner accepted this as a known platform
+limitation rather than a blocking condition; see
+[the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md)
+for the evidence and decision record. Main power remains the only proven stop
+mechanism for this failure mode.
 
 ## 1. Make the robot safe
 
@@ -327,6 +334,17 @@ the controller link. Cut the main switch immediately if behavior is unexpected
 or the declared bound is exceeded. A successful host serial write only means
 the host accepted the frame; it does not establish controller execution.
 
+Run on `x3-c` on 2026-09-02 with a predeclared 2-second bound: the
+command-timeout half passed (link healthy, driver's own watchdog zeroed the
+wheels correctly). The active-link-loss half did not — wheels kept turning,
+actively driven with no decay, for at least 28 seconds until main power was
+cut. This is root-caused to an absence of any command-loss watchdog in the
+motor controller protocol; see
+[the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
+The project owner accepted this as a known limitation rather than a blocking
+gate, so it no longer prevents floor use below — but main power remains the
+only proven stop mechanism for this failure mode.
+
 - [ ] Forward `+X`: FL, FR, BL, BR encoder deltas are `+ + + +`; `/odom` moves
   in `+X`.
 - [ ] Left strafe `+Y`: encoder deltas are `- + + -`; `/odom` moves in `+Y`.
@@ -334,14 +352,19 @@ the host accepted the frame; it does not establish controller execution.
 - [ ] Position stays continuous after stopping and odometry stops when encoders
   stop.
 - [ ] No normal trial reports a stale encoder or discontinuity diagnostic.
-- [ ] Interrupt a low-speed command stream while lifted and verify the motor
+- [x] Interrupt a low-speed command stream while lifted and verify the motor
   watchdog commands zero and the wheels physically stop within the declared
-  bound.
-- [ ] During securely lifted very-low-speed motion, remove the controller link
+  bound. Passed on `x3-c` on 2026-09-02.
+- [x] During securely lifted very-low-speed motion, remove the controller link
   and verify bounded physical stop with the main switch continuously reachable.
-- [ ] If active-link loss does not demonstrate bounded physical stop, stop the
+  Tested on `x3-c` on 2026-09-02: did **not** stop within bound (wheels kept
+  turning 28+ seconds); main power cut manually. See the known-issue writeup
+  linked above — owner-accepted exception, not a passing result.
+- [x] ~~If active-link loss does not demonstrate bounded physical stop, stop the
   gate and require a validated controller/firmware or independent hardware
-  watchdog before any floor use.
+  watchdog before any floor use.~~ Superseded 2026-09-02: the project owner
+  accepted this risk instead of requiring a watchdog; see the known-issue
+  writeup.
 - [ ] Joystick publishes motion only while the configured deadman is held.
 - [ ] Joystick release, malformed input, input loss, and shutdown each produce a
   stop.
@@ -354,9 +377,14 @@ the host accepted the frame; it does not establish controller execution.
 Move to a clear, level test area. Use a spotter, conservative speeds, one command
 source, and external distance/heading measurements.
 
-- [ ] The lifted active-link-loss gate demonstrated bounded physical stop, or a
-  controller/firmware or independent hardware watchdog has been installed and
-  validated. Otherwise floor use remains prohibited.
+- [x] ~~The lifted active-link-loss gate demonstrated bounded physical stop, or
+  a controller/firmware or independent hardware watchdog has been installed
+  and validated. Otherwise floor use remains prohibited.~~ Superseded
+  2026-09-02: the active-link-loss gate did not pass, and the project owner
+  accepted that as a known limitation rather than a floor-use blocker; see
+  [the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
+  Main power remains the only proven stop mechanism for a command-link loss
+  during motion.
 
 - [ ] Record battery voltage, surface, payload, command, duration, measured
   displacement/heading, encoder deltas, and `/odom` delta for every trial.

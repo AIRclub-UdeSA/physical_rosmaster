@@ -304,9 +304,12 @@ This validates graph/data failure behavior, not stopping from active motion.
 
 After the non-motion gate passes, follow the detailed robot checklist for a
 separate securely lifted, very-low-speed active-link-loss test with the main
-power switch immediately reachable. Do not proceed to floor use unless it
-demonstrates bounded physical stop or a controller-side or independent
-hardware watchdog is validated.
+power switch immediately reachable. Tested on `x3-c` on 2026-09-02: it did not
+demonstrate bounded physical stop, root-caused to an absent command-loss
+watchdog in the motor controller protocol. The project owner accepted this as
+a known limitation rather than a floor-use blocker — see
+[the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
+Main power remains the only proven stop mechanism for this failure mode.
 
 Then complete the remaining lifted gates:
 
@@ -350,10 +353,10 @@ Use `camera_calibration` only if the device-reported intrinsics fail the contrac
 The old autostart instructions targeted separate camera/LiDAR processes, unstable device names, and the former EKF graph. They are obsolete.
 
 Do not point host systemd or `/root/auto_start.sh` at this branch. Autostart
-remains blocked while robot validation of the exact reviewed head containing
-`a08b097` and `bc965a6` is pending, and it stays blocked until one X3 passes the
-complete contract, no-motion live-loss and restoration checks, bounded
-active-link-loss stop behavior or a validated controller/hardware watchdog,
-lifted motion, floor motion, and simulator/physical consumer acceptance.
+stays blocked until one X3 passes the complete contract, no-motion live-loss
+and restoration checks, lifted motion, floor motion, and simulator/physical
+consumer acceptance. Bounded active-link-loss stop behavior is a documented,
+owner-accepted exception rather than a required pass — see
+[the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
 Preparing versioned autostart files is a later project, not part of the current
 manual-validation architecture.

@@ -329,10 +329,16 @@ predeclared stop-time bound and record command, wheel motion, diagnostics, and
 power intervention. Cut the main switch immediately if behavior is unexpected
 or the bound is exceeded.
 
-Host write completion is not controller execution acknowledgement. If the
-lifted active-link-loss test does not demonstrate a bounded physical stop, add
-and validate a controller/firmware or independent hardware watchdog before any
-floor use. Do not treat repeated host zero writes as a substitute.
+Host write completion is not controller execution acknowledgement. Tested on
+`x3-c` on 2026-09-02: the lifted active-link-loss test did not demonstrate a
+bounded physical stop (wheels kept turning, actively driven, for at least 28
+seconds until main power was cut). This was root-caused to a protocol-level
+absence of any command-loss watchdog in the motor controller — see
+[the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
+The project owner accepted this as a known platform limitation rather than a
+blocking requirement, so it no longer prevents floor use. Main power remains
+the only proven stop mechanism for a command-link loss during motion. Do not
+treat repeated host zero writes as a substitute.
 
 Then repeat conservative floor trials with external observations. Do not tune
 geometry or covariance from visual impression alone.
@@ -355,9 +361,9 @@ Autostart work may begin only when one X3 has passed:
 - camera-, LiDAR-, and motor-absent startup gates with a restored full contract
   after each (subject only to the documented current `x3-c` exception);
 - observer-only motor live-loss and its restored full contract;
-- lifted motion and safety gates;
-- bounded lifted active-link-loss behavior, either directly or through a
-  validated controller/hardware watchdog;
+- lifted motion and safety gates (the active-link-loss physical-stop trial is
+  a documented, owner-accepted exception rather than a required pass — see
+  [the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md));
 - bounded floor gates;
 - simulator/physical consumer acceptance;
 - stable motor, LiDAR, and camera identity configuration.

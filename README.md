@@ -57,8 +57,19 @@ treats that driver exit as fatal and shuts down the rest of the graph.
 This is fail-closed process and data behavior, not proof that the controller
 executed a stop. A completed host serial write is not a controller
 acknowledgement, and redundant zero-command attempts are not physical-stop
-proof. Lifted and floor acceptance must confirm motion and stopping from
-available controller feedback and external observation.
+proof.
+
+Confirmed on `x3-c` on 2026-09-02: the vendor motor-controller protocol has no
+command-timeout/watchdog capability at all (full `FUNC_*` command-set audit
+against the hash-verified installed library), and an active command-link loss
+during motion was observed to leave the controller driving the last commanded
+velocity for at least 28 seconds with no decay, stopped only by cutting main
+power. The project owner has accepted this as a known platform limitation
+rather than a blocking gate; see
+[the known-issue writeup](docs/troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md)
+for the full evidence and decision record. Until an independent hardware
+watchdog is added, main power is the only proven stop mechanism for this
+failure mode, for any motion, lifted or floor.
 
 The allowlisted public V3.3.9 `Rosmaster_Lib` source hash is
 `e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
@@ -285,26 +296,31 @@ Manual control is capped at `0.20 m/s` linear and `1.0 rad/s` angular, with lowe
 ## Rollout status
 
 Autostart remains blocked. Runtime commit `a08b097` and the robot-validation
-tooling hardened by `bc965a6` have workstation coverage, but their clean
-deployment as one reviewed head and physical validation on a robot are pending.
-Older robot runs do not validate this head.
+tooling hardened by `bc965a6` passed full robot deployment and validation on
+`x3-c` on 2026-09-02, at exact reviewed head `e34f8a3`.
 
 The gate is:
 
 1. deploy and record one clean branch head at an exact reviewed full SHA that
    contains both `a08b097` and `bc965a6`, with verified stable device
-   identities;
+   identities — **done**, `x3-c` at `e34f8a35a75fb824add197d18fa330d3934eb89b`;
 2. pass the positive non-motion contract, motor-absent-at-startup gate, restored
    positive contract, observer-only live motor-loss gate, and another restored
-   positive contract, in that order;
-3. prove bounded physical stop in a separate securely lifted,
+   positive contract, in that order — **done**, all five passed cleanly;
+3. ~~prove bounded physical stop in a separate securely lifted,
    very-low-speed active-link-loss test, or validate a controller-side or
-   independent hardware watchdog, then pass the other lifted command,
-   encoder, odometry, watchdog, and deadman checks;
-4. repeat bounded forward, lateral, and rotation floor trials;
+   independent hardware watchdog~~ — tested on `x3-c` on 2026-09-02 and did
+   **not** demonstrate bounded stop; root-caused to a protocol-level absence of
+   any command-loss watchdog. The project owner has accepted this as a known
+   limitation rather than a blocking gate — see
+   [the known-issue writeup](docs/troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
+   Main power is the only proven stop mechanism for this failure mode;
+4. pass the other lifted command, encoder, odometry, watchdog, and deadman
+   checks, then repeat bounded forward, lateral, and rotation floor trials;
 5. run one minimal consumer against simulator and hardware without remaps.
 
-Only after one X3 passes all five should a new autostart routine be designed.
+Items 4 and 5 remain open. Once they pass, a new autostart routine may be
+designed.
 
 ## Documentation
 

@@ -27,6 +27,7 @@ Each reusable issue page should cover:
 
 - [2026-08-16 x3-c setup incident](incidents/2026-08-16-x3-c-setup.md)
 - [2026-08-29/30 x3-c host systemd SIGILL incident](incidents/2026-08-29-x3-c-host-systemd-sigill.md)
+- [Motor controller has no command-loss watchdog](known_issues/motor-controller-no-link-loss-watchdog.md)
 - [Docker runc illegal instruction](known_issues/docker-runc-illegal-instruction.md)
 - [Host storage integrity and safe shutdown](known_issues/host-storage-integrity-and-safe-shutdown.md)
 - [Root filesystem full causing LightDM login loop and Docker growth](known_issues/root-filesystem-full-login-loop.md)

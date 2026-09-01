@@ -58,14 +58,20 @@ creating a second deployment architecture.
    runtime `a08b097` and gate-hardening `bc965a6`;
 4. pass the positive contract, motor startup absence, a restored positive
    contract, observer-only live no-command loss, and a second restored positive
-   contract, in that order;
-5. prove bounded physical stop in a separate securely lifted active-loss gate;
+   contract, in that order — **done on 2026-09-02, see Section 4**;
+5. ~~prove bounded physical stop in a separate securely lifted active-loss
+   gate~~ — tested on 2026-09-02: **did not** demonstrate bounded stop. Root
+   cause and the owner's decision to accept this as a known limitation rather
+   than a blocking gate are recorded in
+   [the known-issue writeup](../docs/troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
+   No longer blocks the items below;
 6. resolve the uneven lifted-wheel response;
 7. verify operator tools;
 8. perform repeated measured floor trials;
 9. prove simulator/physical consumer parity and finish the handoff.
 
-Do not move to a later gate because an earlier failure appears unrelated.
+Do not move to a later gate because an earlier failure appears unrelated,
+except where noted above as an explicit owner-accepted exception.
 
 ## 1. Preserve the previous evidence
 
@@ -370,25 +376,98 @@ absence, a restored positive contract, observer-only live loss, and a second
 restored positive contract. Do not treat the no-motion probe as permission for
 general motion.
 
-## 5. Prove bounded active-motion stop
+### 2026-09-02 result: full non-motion sequence passed
 
-Only after the no-motion sequence passes, secure the robot fully lifted, keep a
-human at the main power switch, use one audited very-low-speed command source,
-and perform a separately recorded controller-link-loss/watchdog trial. Measure
-whether the wheels physically stop within the reviewed bound; a host serial
-write completing, a zero-command attempt, process exit, or quiet ROS graph is
-not controller acknowledgement and is not proof of physical stop. If bounded
-physical stop is not demonstrated, require a controller-side or hardware
-watchdog before any floor use. Do not combine this active trial with
+Deployed and validated exact head `e34f8a35a75fb824add197d18fa330d3934eb89b` on
+`x3-c`. `git status --porcelain` empty, `HEAD` matched
+`origin/platform/simulator-parity` exactly, both `a08b097` and `bc965a6`
+confirmed ancestors. `rosmaster_lib_probe.py --hash-only` exited 0 with the
+matching V3.3.9 digest. Clean build of all ten workspace packages (10
+finished, 2min31s). `colcon test` on the eight local packages: **125 tests, 0
+errors, 0 failures, 3 skipped** — matches the workstation baseline exactly.
+
+All five required non-motion steps then passed in order:
+
+1. Positive contract (pre-motion): passed, all required topics healthy,
+   `/tf_static=2`, zero `/cmd_vel` publishers.
+2. Motor absence at startup: driver raised `SerialException` on the missing
+   device, exited code 1; `ros2 launch`'s own `OnProcessExit` handling
+   correctly cascaded shutdown to every other node with no manual
+   intervention, and the whole strict graph drained on its own.
+3. Restored positive contract: passed.
+4. Observer-only live no-command loss (`motor_live_loss_probe.py`): **PASS**.
+   Baseline healthy; on disconnect, the receive thread raised
+   `SerialException` within ~40ms; three zero-command write attempts were made
+   and all three failed (`Errno 5: Input/output error`, correctly recorded as
+   "delivery is not proven"); every controller-derived topic had zero messages
+   after loss; driver exited and the full strict graph drained in about 1.0s
+   with no manual intervention. Full JSON archived on the robot at
+   `/root/rosmaster-recovery-evidence/motor-live-loss-2026-09-02.json`.
+5. Second restored positive contract: passed.
+
+Container-local evidence from the prior (2026-09-01, runtime `55caf7a`)
+session — the `pr3-2026-09-01-55caf7a-{post-hub-positive,fail-motor,
+fail-motor-live,restore-after-motor}` directories — was archived and hashed to
+durable workstation storage at `/home/juan/rosmaster-evidence/2026-09-01/`
+before this deployment, per the required order above. That evidence
+independently confirms the `55caf7a` live-loss failure this runtime fixes:
+diagnostics stayed `healthy` and `/joint_states` kept publishing at 10 Hz after
+the controller was disconnected.
+
+One operational finding unrelated to the safety result: `ros2 launch` did not
+respond to `SIGINT` sent externally to a healthy, already-running graph (twice,
+~30s), and `SIGTERM` to the launch parent killed only the parent, orphaning all
+six child nodes, which had to be terminated individually. This is distinct from
+the required-node-exit cascade above, which worked correctly both times it was
+exercised. Relevant for autostart design later (a systemd unit's `KillMode`
+needs to target the whole cgroup, not just the main PID).
+
+## 5. Prove bounded active-motion stop — tested 2026-09-02, did not pass
+
+Secured the robot fully lifted, with a human at the main power switch and a
+predeclared 2-second stop bound. Sub-test 1 (command-timeout watchdog, link
+healthy: a 1-second `timeout`-wrapped `+0.05 m/s` stream with no final zero)
+passed cleanly — `/joint_states` returned to zero and diagnostics stayed
+healthy with zero write failures, matching the driver's `cmd_vel_timeout`
+design.
+
+Sub-test 2 (active link loss during motion) did **not** demonstrate bounded
+stop. An uninterrupted `+0.05 m/s` stream was started; once the operator
+visually confirmed wheel motion (onset took roughly 2-3 seconds at this speed
+and voltage — see Section 6), the motor controller was physically
+disconnected. `/joint_states` velocity was logged throughout: all four wheels
+continued rotating in a sustained, rhythmic oscillation between roughly `1.3`
+and `3.7 rad/s` with no decay for the entire 28-second recording window, well
+past the 2-second bound. The operator cut main power at the switch per the
+predeclared procedure; robot and operator were unharmed, no damage.
+
+Root cause: the exact hash-verified installed `Rosmaster_Lib.py` was pulled
+from the robot and its complete protocol was audited (all 30 `FUNC_*` command
+codes, every public method). It has no command-timeout, watchdog, heartbeat,
+or auto-stop capability at all — not an unused feature, an absent one. A
+Pi-side software fix is therefore not feasible for this specific failure mode:
+the driver's own `cmd_vel_timeout` watchdog only works by sending an explicit
+zero that the still-connected controller obeys, which by definition cannot
+happen once the link itself is gone.
+
+The project owner reviewed this evidence on 2026-09-02 and decided to accept
+the residual risk rather than block on a hardware fix with no committed
+timeline; see
+[the known-issue writeup](../docs/troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md)
+for the full record. **This gate no longer blocks Sections 6-9 below.** Main
+power remains the only proven stop mechanism for a command-link loss during
+motion, lifted or floor. Do not combine any future repeat of this trial with
 `motor_live_loss_probe.py`, whose pre-arm contract correctly rejects every
 command publisher and message.
 
 ## 6. Resolve the weak and uneven lifted-wheel response
 
-This entire section remains blocked until the exact reviewed full-SHA head
-containing both `a08b097` and `bc965a6` passes the no-motion sequence,
-restoration contract, and separate active-motion physical-stop gate above on the
-robot.
+The exact reviewed full-SHA head containing both `a08b097` and `bc965a6`
+passed the no-motion sequence and restoration contract on the robot on
+2026-09-02; see Section 4. The active-motion physical-stop gate above did not
+pass and is tracked as an accepted, documented exception rather than a
+blocker — see
+[the known-issue writeup](../docs/troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
 
 During the post-hub strict no-command bringup, two contract probes, and sensor
 soak, the operator observed no wheel movement. This establishes quiet startup
@@ -398,6 +477,21 @@ The previous lifted run established the expected signs but did not establish
 usable motion quality. At `10.2` to `10.3` V, wheel response was strongly uneven
 and a one-second `+0.30 rad/s` yaw command produced only `+0.0124 rad` of odometry
 yaw. Low voltage is a test condition, not a proven root cause.
+
+A second, independently instrumented data point from 2026-09-02 (battery
+`10.6` V) is consistent with that finding and adds detail: logged
+`/joint_states` velocity through a 3-second `+0.05 m/s` pulse showed near-zero
+position for roughly the first 2 seconds (a visible delay the operator also
+observed directly, confirming it is real and not a logging artifact), then a
+sudden release into substantial but wildly uneven rotation — front-right moved
+`3.67 rad` (~210°) while back-left moved only `0.85 rad` (~48°) over the same
+window, with peak per-wheel velocities of `2.5-3.3 rad/s`, faster than the
+`~1.5 rad/s` a `0.05 m/s` command should nominally produce. The operator
+independently confirmed some wheels visibly started turning before others.
+This delayed-then-uneven-then-overshooting shape looks like stiction
+(static friction) that releases unevenly per wheel, worsened by low voltage,
+rather than a steady proportional response — still to be diagnosed against
+the checks below, not assumed.
 
 Before motion:
 
@@ -505,6 +599,9 @@ gracefully. It must not start any command publisher or application behavior by
 default, and it requires its own reboot, failure-injection, and shutdown
 validation.
 
-The immediate next action is evidence archival followed by clean deployment of
-the exact reviewed full-SHA branch head containing both `a08b097` and
-`bc965a6`; it is not motion or autostart.
+Evidence archival, clean deployment, and the full non-motion sequence are done
+as of 2026-09-02 (Section 4). The active-motion physical-stop gate was tested
+and is now a documented, owner-accepted exception rather than a blocker
+(Section 5). The immediate next action is diagnosing the uneven lifted-wheel
+response (Section 6), then operator-tool safety, floor trials, and consumer
+parity, in that order; it is still not autostart.
