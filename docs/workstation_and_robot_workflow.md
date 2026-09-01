@@ -11,6 +11,9 @@ motion, and final contract acceptance. Before importing sources, ensure that
 Create a normal ROS workspace and import the pinned camera driver:
 
 ```bash
+(
+set -eo pipefail
+
 mkdir -p ~/rosmaster_physical_ws/src
 cd ~/rosmaster_physical_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
@@ -19,16 +22,21 @@ git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
 
 cd ~/rosmaster_physical_ws
 vcs import src < src/physical_rosmaster/physical_rosmaster.repos
+test -z "$(git -C src/ros2_astra_camera status --porcelain)"
+test "$(git -C src/ros2_astra_camera rev-parse HEAD)" = \
+  "f7e71d9ce806e788cb48d8580aac2c778fba4214"
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
-colcon list --base-paths src/physical_rosmaster
+colcon list --base-paths src
 colcon build --symlink-install
+)
 ```
 
 This default clone is the canonical workflow after the architecture reaches
 `main`. For the current pre-merge `x3-c` rollout, select one reviewed,
-published `platform/simulator-parity` head containing `a08b097` before the
-`vcs import`; use [robot_side_next_moves.md](robot_side_next_moves.md).
+published `platform/simulator-parity` head at an exact reviewed full SHA that
+contains both `a08b097` and `bc965a6` before the `vcs import`; use
+[robot_side_next_moves.md](robot_side_next_moves.md).
 
 Expected local package inventory:
 
@@ -43,9 +51,15 @@ yahboomcar_description
 yahboomcar_visual
 ```
 
+The complete `colcon list --base-paths src` inventory must contain exactly
+these eight packages plus `astra_camera` and `astra_camera_msgs`.
+
 Useful focused checks:
 
 ```bash
+(
+set -eo pipefail
+
 cd ~/rosmaster_physical_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
@@ -60,13 +74,14 @@ colcon test-result --verbose
 python3 -m compileall -q src/physical_rosmaster
 
 cd src/physical_rosmaster
-export PYTHONPATH="$PWD/yahboomcar_bringup:$PWD/tools:$PYTHONPATH"
+export PYTHONPATH="$PWD/yahboomcar_bringup:$PWD/tools:${PYTHONPATH:-}"
 python3 -m pytest -q \
   tools/test_rosmaster_lib_probe.py \
   tools/test_motor_live_loss_probe.py \
   tools/test_motor_live_loss_ros_smoke.py \
   tools/test_physical_contract_probe.py \
   tools/test_safe_cmd_vel_pulse.py
+)
 ```
 
 The package gate already runs the motor transport, driver, and launch tests;
@@ -101,28 +116,90 @@ Expected paths:
 
 Before changing an existing workspace, put source backups outside `/root/yahboomcar_ws`. A backup containing packages anywhere under the workspace causes duplicate package discovery.
 
+For the current pre-merge `x3-c` rollout, replace the reviewed-SHA marker and
+verify the exact published revision before importing or building:
+
+```bash
+(
+set -eo pipefail
+
+cd /root/yahboomcar_ws/src/physical_rosmaster
+git fetch origin
+git checkout platform/simulator-parity
+git pull --ff-only
+test -z "$(git status --porcelain)"
+test "$(git rev-parse HEAD)" = \
+  "$(git rev-parse origin/platform/simulator-parity)"
+git merge-base --is-ancestor \
+  a08b097b22781ca500fd61c01164a4e7167b3873 HEAD
+git merge-base --is-ancestor \
+  bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80 HEAD
+test "$(git rev-parse HEAD)" = "REPLACE_WITH_REVIEWED_FULL_SHA"
+)
+```
+
+Before rebuilding an existing workspace, preserve generated state outside the
+workspace instead of deleting it in place:
+
+```bash
+(
+set -eo pipefail
+
+cd /root/yahboomcar_ws
+archive_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+generated_archive="/root/rosmaster-workspace-archives/${archive_stamp}-pre-deploy"
+test ! -e "$generated_archive"
+mkdir -p /root/rosmaster-workspace-archives
+mkdir "$generated_archive"
+for generated_tree in build install log; do
+  if [ -e "$generated_tree" ]; then
+    mv -- "$generated_tree" "$generated_archive/"
+  fi
+done
+test ! -e build
+test ! -e install
+test ! -e log
+)
+```
+
+Retain the timestamped archive until the clean build/test evidence is reviewed.
+Removing it is a later, explicit maintenance action.
+
 Inside the container:
 
 ```bash
+(
+set -eo pipefail
+
 cd /root/yahboomcar_ws/src
 vcs import . < physical_rosmaster/physical_rosmaster.repos
+test -z "$(git -C ros2_astra_camera status --porcelain)"
+test "$(git -C ros2_astra_camera rev-parse HEAD)" = \
+  "f7e71d9ce806e788cb48d8580aac2c778fba4214"
 
 cd /root/yahboomcar_ws
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
+colcon list --base-paths src
 colcon build --symlink-install
 source install/setup.bash
+)
 ```
 
-`Rosmaster_Lib` must be importable by the same Python used by ROS 2:
+Before any driver construction, run the fail-closed installed-source preflight
+with the same Python used by ROS 2:
 
 ```bash
-python3 -c "from Rosmaster_Lib import Rosmaster; print(Rosmaster)"
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/rosmaster_lib_probe.py --hash-only
 ```
 
-The runtime checks the reviewed source hash after this import and before
-constructing the transport. The hash confirms the expected version and private
-hook shape. Runtime `a08b097` expects
+The command must exit `0`; a nonzero result blocks launch. It reports the
+installed path and digest, and commit `bc965a6` makes a source mismatch
+fail closed rather than merely printing it. The runtime independently checks
+the reviewed source hash after import and before constructing the transport.
+The hash confirms the expected version and private hook shape. Runtime
+`a08b097` expects
 `e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c` for
 public V3.3.9. Because import happens first, this is not supply-chain
 attestation.
@@ -132,6 +209,8 @@ attestation.
 Discover identities while no competing process owns the devices:
 
 ```bash
+source /opt/ros/humble/setup.bash
+source /root/yahboomcar_ws/install/setup.bash
 ls -l /dev/serial/by-id
 udevadm info --attribute-walk --name=/dev/ttyUSB0
 lsusb
@@ -177,9 +256,9 @@ a successful write call or stop log.
 Use [robot_side_verification_todo.md](robot_side_verification_todo.md) as the
 authoritative, evidence-backed checklist for the first robot acceptance run.
 Runtime commit `a08b097` has not yet passed this robot-side checklist. Deploy
-and record one clean reviewed branch head containing that runtime commit rather
-than treating older `x3-c` evidence as acceptance of the new transport
-behavior.
+and record one clean branch head at an exact reviewed full SHA containing both
+that runtime commit and validation-tooling commit `bc965a6`, rather than
+treating older `x3-c` evidence as acceptance of the new transport behavior.
 
 Start the platform manually:
 
@@ -271,9 +350,10 @@ Use `camera_calibration` only if the device-reported intrinsics fail the contrac
 The old autostart instructions targeted separate camera/LiDAR processes, unstable device names, and the former EKF graph. They are obsolete.
 
 Do not point host systemd or `/root/auto_start.sh` at this branch. Autostart
-remains blocked while robot validation of runtime `a08b097` is pending, and it
-stays blocked until one X3 passes the complete contract, no-motion live-loss
-and restoration checks, bounded active-link-loss stop behavior or a validated
-controller/hardware watchdog, lifted motion, floor motion, and
-simulator/physical consumer acceptance. Preparing versioned autostart files is
-a later project, not part of the current manual-validation architecture.
+remains blocked while robot validation of the exact reviewed head containing
+`a08b097` and `bc965a6` is pending, and it stays blocked until one X3 passes the
+complete contract, no-motion live-loss and restoration checks, bounded
+active-link-loss stop behavior or a validated controller/hardware watchdog,
+lifted motion, floor motion, and simulator/physical consumer acceptance.
+Preparing versioned autostart files is a later project, not part of the current
+manual-validation architecture.

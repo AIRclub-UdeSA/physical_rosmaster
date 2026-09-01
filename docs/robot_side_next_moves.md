@@ -18,21 +18,28 @@ Runtime commit `a08b097` replaces the failed `55caf7a` motor path with
 checksum-valid report freshness, observable and bounded post-construction
 serial writes, terminal failure diagnostics, controller-topic suppression, and
 strict-launch exit. It also adds an observer-only no-motion live-loss probe.
-This is workstation-tested code, not robot acceptance evidence: `a08b097` has
-not yet been deployed to or validated on `x3-c`.
+Gate-hardening commit `bc965a6` adds the deterministic recovery-driver smoke
+test, exact-source pseudo-terminal coverage, and stricter standalone probe
+tests. This is workstation-tested code, not robot acceptance evidence: an exact
+reviewed head containing both `a08b097` and `bc965a6` has not yet been deployed
+to or validated on `x3-c`.
 
-The workstation eight-package build completed successfully. The package test
-result is `125 tests, 0 errors, 0 failures, 3 skipped`; the focused observer
-tool suites add 44 passing tests. The exact recovered/public V3.3.9 source is
-compatible with the wrapper and has SHA256
+The fresh workstation build of the eight local packages plus both pinned Astra
+packages completed successfully. The local package test result is `125 tests,
+0 errors, 0 failures, 3 skipped`; the documented
+standalone source-tree command adds 80 passing tests. The separate exact-source
+V3.3.9 pseudo-terminal gate adds 8 passing tests. That exact recovered/public
+source is compatible with the wrapper and has SHA256
 `e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
 That digest is an installed-source compatibility/version gate evaluated after
 import, not a supply-chain attestation.
 
 The remediation lineage is `origin/platform/simulator-parity` at `7113f07`
 plus `origin/main` at `1d4b94f`, merged as `32feb1b`, followed by runtime commit
-`a08b097`. The runtime commit and this documentation are still local; deploy
-only the eventual reviewed, published branch head and record its full SHA.
+`a08b097`, acceptance-sequence documentation commit `079b71a`, and workstation
+gate-hardening commit `bc965a6`. The robot has not received this lineage;
+deploy only a reviewed, published branch head containing both `a08b097` and
+`bc965a6`, and record its exact full SHA.
 
 The target configuration is still the canonical new-robot setup in the root
 README and [setup guide](setup_guide_ros2_humble_autostart.md): one clean Humble
@@ -47,7 +54,8 @@ creating a second deployment architecture.
 1. archive the latest live-loss evidence that still exists only in the robot
    container;
 2. establish a safe, charged, persistent host configuration;
-3. deploy and build one clean current PR head containing runtime `a08b097`;
+3. deploy and build one clean, exact reviewed full-SHA PR head containing both
+   runtime `a08b097` and gate-hardening `bc965a6`;
 4. pass the positive contract, motor startup absence, a restored positive
    contract, observer-only live no-command loss, and a second restored positive
    contract, in that order;
@@ -142,10 +150,14 @@ without calling `Serial.write()`.
 Inside the ROS 2 Humble container:
 
 For the remediation run, do not execute the fetch/pull sequence until the
-reviewed branch containing `a08b097` is published. Both cleanliness checks and
-all three revision checks must succeed after replacing the reviewed-SHA marker.
+reviewed branch containing both `a08b097` and `bc965a6` is published. Both
+cleanliness checks and all four revision checks must succeed after replacing
+the reviewed-SHA marker with the exact reviewed full SHA.
 
 ```bash
+(
+set -eo pipefail
+
 cd /root/yahboomcar_ws/src/physical_rosmaster
 test -z "$(git status --porcelain)"
 git fetch origin
@@ -156,9 +168,70 @@ git rev-parse HEAD
 git rev-parse origin/platform/simulator-parity
 test "$(git rev-parse HEAD)" = \
   "$(git rev-parse origin/platform/simulator-parity)"
-git merge-base --is-ancestor a08b097 HEAD
+git merge-base --is-ancestor \
+  a08b097b22781ca500fd61c01164a4e7167b3873 HEAD
+git merge-base --is-ancestor \
+  bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80 HEAD
 test "$(git rev-parse HEAD)" = "REPLACE_WITH_REVIEWED_FULL_SHA"
+)
 ```
+
+Run the library compatibility preflight from that exact checkout. It is
+fail-closed: require exit status 0, and stop the deployment on any other status.
+The `--hash-only` path must not open the serial device or construct the vendor
+controller:
+
+```bash
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/rosmaster_lib_probe.py --hash-only || exit 1
+```
+
+Before the clean build, move generated state to a recoverable archive outside
+the colcon workspace. Do not use `rm`, and do not move or alter the historical
+`/root/rosmaster-recovery-evidence` records preserved in Section 1:
+
+```bash
+(
+set -eo pipefail
+
+cd /root/yahboomcar_ws
+archive_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+generated_archive="/root/rosmaster-workspace-archives/${archive_stamp}-pre-deploy"
+test ! -e "$generated_archive"
+mkdir -p /root/rosmaster-workspace-archives
+mkdir "$generated_archive"
+for generated_dir in build install log; do
+  if test -e "$generated_dir"; then
+    mv "$generated_dir" "$generated_archive"/
+  fi
+done
+test ! -e build
+test ! -e install
+test ! -e log
+
+cd /root/yahboomcar_ws/src
+vcs import . < physical_rosmaster/physical_rosmaster.repos
+test -z "$(git -C ros2_astra_camera status --porcelain)"
+test "$(git -C ros2_astra_camera rev-parse HEAD)" = \
+  "f7e71d9ce806e788cb48d8580aac2c778fba4214"
+cd /root/yahboomcar_ws
+source /opt/ros/humble/setup.bash
+rosdep install --from-paths src --ignore-src -r -y
+colcon list --base-paths src
+colcon build --symlink-install
+colcon test --packages-select \
+  laserscan_to_point_pulisher sllidar_ros2 yahboomcar_astra \
+  yahboomcar_base_node yahboomcar_bringup yahboomcar_ctrl \
+  yahboomcar_description yahboomcar_visual
+colcon test-result --verbose
+source install/setup.bash
+)
+```
+
+Require `colcon list --base-paths src` to report exactly the eight repository
+packages plus the two pinned Astra packages before accepting the clean build.
+Keep the generated-state archive until the new deployment record and its logs
+have been copied to durable project storage.
 
 - [x] `git status --porcelain` is empty.
 - [x] The robot `HEAD` equals its cached `origin/platform/simulator-parity` at
@@ -183,15 +256,23 @@ Those checks describe the historical `55caf7a` run. For the remediation run:
 
 - [ ] Archive the container-local evidence listed in Section 1 before cleaning
   generated state.
-- [ ] Fetch only after the reviewed branch containing `a08b097` is published;
-  record the new exact local and remote head and require an empty worktree.
-- [ ] Clean generated state, import the pinned Astra revision, build all ten
-  workspace packages, and run the required eight local-package test selection.
+- [ ] Fetch only after the reviewed branch containing both `a08b097` and
+  `bc965a6` is published; record the exact reviewed full SHA, require it as both
+  local and remote head, and require an empty worktree.
+- [ ] Run `python3 tools/rosmaster_lib_probe.py --hash-only` from that checkout
+  and require exit status 0 before constructing the runtime driver or
+  continuing the deployment.
+- [ ] Move the existing `build`, `install`, and `log` directories to the
+  recoverable, timestamped archive outside `/root/yahboomcar_ws`; do not delete
+  them or alter the preserved historical `55caf7a` evidence.
+- [ ] Import the pinned Astra revision from clean generated state; require its
+  worktree to be clean and its `HEAD` to equal
+  `f7e71d9ce806e788cb48d8580aac2c778fba4214`; then confirm exactly ten
+  workspace packages, build all ten, and run the required eight local-package
+  test selection.
 - [ ] Require zero build failures, zero test errors, and zero test failures;
   retain the logs rather than borrowing the workstation result as robot
   evidence.
-- [ ] Run `tools/rosmaster_lib_probe.py` and require the supported V3.3.9 hash
-  before constructing the runtime driver.
 
 Do not edit code on the robot during acceptance. If a fix is required, stop the
 gate, implement and commit it on the branch, then restart this section from a
@@ -203,6 +284,8 @@ With the wheels lifted and no command publisher, export the verified identities
 and start only the strict platform bringup:
 
 ```bash
+source /opt/ros/humble/setup.bash
+source /root/yahboomcar_ws/install/setup.bash
 export ROSMASTER_MOTOR_PORT=/dev/robot/motor
 export ROSMASTER_LIDAR_PORT=/dev/robot/lidar
 export ROSMASTER_ASTRA_SERIAL=ACRC64300ET
@@ -248,8 +331,10 @@ python3 tools/physical_contract_probe.py
   level `OK`/healthy with zero failure counters, and cached `/joint_states`,
   `/voltage`, and `/vel_raw` continued to look fresh. No command publisher was
   present, but stale healthy feedback is not acceptable. Runtime commit
-  `a08b097` is the workstation remediation and remains unvalidated on the
-  robot. With the wheels secured and the full strict graph healthy, run:
+  `a08b097` is the motor remediation, and `bc965a6` hardens its workstation
+  recovery gates; the exact reviewed full-SHA head containing both remains
+  unvalidated on the robot. With the wheels secured and the full strict graph
+  healthy, run:
 
   ```bash
   export ROSMASTER_MOTOR_PORT=/dev/robot/motor
@@ -274,14 +359,16 @@ python3 tools/physical_contract_probe.py
 
 Perform device-absence checks one at a time with power controlled safely. The
 camera-absence and LiDAR-absence tests need not be repeated for the motor-only
-`a08b097` change unless deployment, launch, or positive-contract evidence shows
-a regression. Motor startup absence, live no-command loss, and restoration are
-mandatory.
+runtime change in `a08b097` unless deployment, launch, or positive-contract
+evidence shows a regression. The deployed candidate must still be the exact
+reviewed full SHA containing both `a08b097` and `bc965a6`. Motor startup absence,
+live no-command loss, and restoration are mandatory.
 
-Stop here until the exact deployed head containing `a08b097` passes clean robot
-build/test, the positive contract, startup motor absence, a restored positive
-contract, observer-only live loss, and a second restored positive contract. Do
-not treat the no-motion probe as permission for general motion.
+Stop here until the exact deployed reviewed full SHA containing both `a08b097`
+and `bc965a6` passes clean robot build/test, the positive contract, startup motor
+absence, a restored positive contract, observer-only live loss, and a second
+restored positive contract. Do not treat the no-motion probe as permission for
+general motion.
 
 ## 5. Prove bounded active-motion stop
 
@@ -298,9 +385,10 @@ command publisher and message.
 
 ## 6. Resolve the weak and uneven lifted-wheel response
 
-This entire section remains blocked until the `a08b097` no-motion sequence,
-restoration contract, and separate active-motion physical-stop gate above pass
-on the robot.
+This entire section remains blocked until the exact reviewed full-SHA head
+containing both `a08b097` and `bc965a6` passes the no-motion sequence,
+restoration contract, and separate active-motion physical-stop gate above on the
+robot.
 
 During the post-hub strict no-command bringup, two contract probes, and sensor
 soak, the operator observed no wheel movement. This establishes quiet startup
@@ -371,9 +459,9 @@ Run one command source at a time with the wheels lifted:
 
 ## 8. Perform measured floor acceptance
 
-Floor testing is blocked by the pending `a08b097` robot validation, bounded
-active physical-stop proof, and all remaining lifted-motion and operator-tool
-gates.
+Floor testing is blocked by the pending robot validation of the exact reviewed
+full-SHA head containing both `a08b097` and `bc965a6`, bounded active
+physical-stop proof, and all remaining lifted-motion and operator-tool gates.
 
 Use a clear level area, a human observer, the tested stop path, one command
 publisher, conservative bounds, and an external distance/heading measurement.
@@ -418,4 +506,5 @@ default, and it requires its own reboot, failure-injection, and shutdown
 validation.
 
 The immediate next action is evidence archival followed by clean deployment of
-a reviewed branch head containing `a08b097`; it is not motion or autostart.
+the exact reviewed full-SHA branch head containing both `a08b097` and
+`bc965a6`; it is not motion or autostart.

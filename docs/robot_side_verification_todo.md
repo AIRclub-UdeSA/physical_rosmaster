@@ -4,9 +4,12 @@ Use this checklist on one ROSMASTER X3 before starting any autostart work. Every
 gate is mandatory unless it is marked optional. Record commands, logs, bag paths,
 and measured results in the deployment record for the tested robot.
 
-This checklist targets one exact reviewed branch head containing runtime
-commit `a08b097`. Its robot-side validation is pending, and autostart remains
-blocked.
+This checklist targets one exact reviewed, published branch head. That head must
+contain both runtime commit `a08b097b22781ca500fd61c01164a4e7167b3873`
+and workstation-validation commit
+`bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80`. Record and substitute the final
+full deployment SHA at test time. Robot-side validation is pending, and
+autostart remains blocked.
 
 ## Test record
 
@@ -14,7 +17,8 @@ blocked.
 - [ ] Tester and observer: `________________`
 - [ ] Date, surface, payload, and battery state: `________________`
 - [ ] Reviewed deployment SHA: `________________`
-- [ ] Repository commit from `git rev-parse HEAD` (must contain `a08b097`): `________________`
+- [ ] Repository commit from `git rev-parse HEAD` (must equal the reviewed
+  deployment SHA above): `________________`
 - [ ] `Rosmaster_Lib` path and SHA256: `________________`
 - [ ] Astra model and serial: `________________`
 - [ ] Astra physical topology and cold/warm boot evidence: `________________`
@@ -54,11 +58,14 @@ Stop the test and leave autostart blocked if any of these occurs:
 
 Inside the ROS 2 Humble container:
 
-Do not begin this deployment until the reviewed branch containing `a08b097`
-has been published. Both cleanliness checks and all three revision checks below
-must succeed after replacing the reviewed-SHA marker.
+Do not begin this deployment until the exact reviewed branch head has been
+published. Both cleanliness checks, both ancestry checks, and the exact-head
+check below must succeed.
 
 ```bash
+(
+set -eo pipefail
+
 cd /root/yahboomcar_ws/src/physical_rosmaster
 test -z "$(git status --porcelain)"
 git fetch origin
@@ -69,16 +76,50 @@ git rev-parse HEAD
 git rev-parse origin/platform/simulator-parity
 test "$(git rev-parse HEAD)" = \
   "$(git rev-parse origin/platform/simulator-parity)"
-git merge-base --is-ancestor a08b097 HEAD
-test "$(git rev-parse HEAD)" = "REPLACE_WITH_REVIEWED_FULL_SHA"
+git merge-base --is-ancestor \
+  a08b097b22781ca500fd61c01164a4e7167b3873 HEAD
+git merge-base --is-ancestor \
+  bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80 HEAD
+test "$(git rev-parse HEAD)" = \
+  "REPLACE_WITH_REVIEWED_FULL_SHA"
+)
+```
+
+Before importing dependencies or building, move any previous generated
+workspace state into a timestamped evidence directory outside
+`/root/yahboomcar_ws`. This is a recoverable archive, not deletion; never use a
+destructive `rm` command for this cleanup. The final three checks must confirm
+that no old generated directory remains in the workspace.
+
+```bash
+(
+set -eo pipefail
+
+cd /root/yahboomcar_ws
+archive_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+archive_dir="/root/rosmaster-workspace-archives/${archive_stamp}-pre-deploy"
+test ! -e "$archive_dir"
+mkdir -p /root/rosmaster-workspace-archives
+mkdir "$archive_dir"
+for generated_dir in build install log; do
+  if test -e "$generated_dir"; then
+    mv -- "$generated_dir" "$archive_dir/"
+  fi
+done
+test ! -e build
+test ! -e install
+test ! -e log
 
 cd /root/yahboomcar_ws/src
 vcs import . < physical_rosmaster/physical_rosmaster.repos
+test -z "$(git -C ros2_astra_camera status --porcelain)"
+test "$(git -C ros2_astra_camera rev-parse HEAD)" = \
+  "f7e71d9ce806e788cb48d8580aac2c778fba4214"
 
 cd /root/yahboomcar_ws
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
-colcon list --base-paths src/physical_rosmaster
+colcon list --base-paths src
 colcon build --symlink-install
 colcon test --packages-select \
   laserscan_to_point_pulisher sllidar_ros2 yahboomcar_astra \
@@ -86,37 +127,31 @@ colcon test --packages-select \
   yahboomcar_description yahboomcar_visual
 colcon test-result --verbose
 source install/setup.bash
+)
 ```
 
-- [ ] The physical repository reports exactly the eight documented local
-  packages.
-- [ ] The external workspace contains `astra_camera` and `astra_camera_msgs` at
-  the commit pinned in `physical_rosmaster.repos`.
+- [ ] The workspace reports exactly the eight documented local packages plus
+  `astra_camera` and `astra_camera_msgs`.
+- [ ] The external camera-driver worktree is clean and its `HEAD` equals the
+  commit pinned in `physical_rosmaster.repos`.
 - [ ] The complete Humble workspace builds without removed navigation, SLAM,
   localization, or EKF dependencies.
 - [ ] Tests have no failures. Record any intentional skips.
-- [ ] `python3 -c "from Rosmaster_Lib import Rosmaster; print(Rosmaster)"` passes.
-- [ ] Hash the installed `Rosmaster_Lib.py` and require the exact supported
-  digest before starting the driver.
+- [ ] The fail-closed library preflight below exits `0` and reports
+  `matches_public_v3_3_9: true` before starting the driver.
 
 ```bash
-python3 - <<'PY'
-import hashlib
-import inspect
-from Rosmaster_Lib import Rosmaster
-
-path = inspect.getsourcefile(Rosmaster)
-with open(path, "rb") as source:
-    digest = hashlib.sha256(source.read()).hexdigest()
-print(path)
-print(digest)
-PY
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/rosmaster_lib_probe.py --hash-only
 ```
 
 The only supported public V3.3.9 `Rosmaster_Lib.py` SHA256 is
 `e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
-Commit `a08b097` checks this digest after import and refuses a mismatch. This is
-a compatibility/version gate for the reviewed implementation, not supply-chain
+Runtime commit `a08b097b22781ca500fd61c01164a4e7167b3873` checks this digest after
+import and refuses a mismatch. Workstation-validation commit
+`bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80` makes the preflight above fail
+closed on an import, inspection, or digest mismatch. This is a
+compatibility/version gate for the reviewed implementation, not supply-chain
 attestation: it does not prove the file's provenance, trusted installation, or
 the integrity of the surrounding host.
 
@@ -131,6 +166,8 @@ is not an MCU acknowledgement and does not prove physical stop.
 Run discovery while competing processes are stopped:
 
 ```bash
+source /opt/ros/humble/setup.bash
+source /root/yahboomcar_ws/install/setup.bash
 lsusb
 lsusb -t
 ls -l /dev/serial/by-id
@@ -164,6 +201,8 @@ ros2 run astra_camera list_devices_node
 Keep the wheels secured and start only the platform:
 
 ```bash
+source /opt/ros/humble/setup.bash
+source /root/yahboomcar_ws/install/setup.bash
 ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
 ```
 
@@ -353,7 +392,10 @@ source, and external distance/heading measurements.
 - [ ] A second reviewer confirms all required boxes and evidence.
 - [ ] Mark this X3 as the first accepted platform only after sections 1–7 pass.
 
-Robot validation of `a08b097` is pending. Autostart remains blocked until this
-checklist passes on one X3. The next task after acceptance is to design a
-versioned, failure-propagating autostart routine that invokes the single strict
-bringup and never starts operator tools or project behavior by default.
+Robot validation of runtime commit
+`a08b097b22781ca500fd61c01164a4e7167b3873` and workstation-validation commit
+`bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80` is pending. Autostart remains
+blocked until this checklist passes on one X3. The next task after acceptance
+is to design a versioned, failure-propagating autostart routine that invokes the
+single strict bringup and never starts operator tools or project behavior by
+default.

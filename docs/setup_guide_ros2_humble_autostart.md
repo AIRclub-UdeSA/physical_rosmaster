@@ -43,17 +43,39 @@ Preserve bags, calibration, and acceptance evidence, and never delete
 Inside the container:
 
 ```bash
+(
+set -eo pipefail
+
 mkdir -p /root/yahboomcar_ws/src
 cd /root/yahboomcar_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
-# For the current pre-merge x3-c recovery, stop here and use the ordered
-# recovery runbook to select the reviewed platform/simulator-parity head first.
+
+# Current pre-merge x3-c recovery only: replace the marker with the reviewed
+# full SHA before running these checks.
+cd physical_rosmaster
+git fetch origin
+git checkout platform/simulator-parity
+git pull --ff-only
+test -z "$(git status --porcelain)"
+test "$(git rev-parse HEAD)" = \
+  "$(git rev-parse origin/platform/simulator-parity)"
+git merge-base --is-ancestor \
+  a08b097b22781ca500fd61c01164a4e7167b3873 HEAD
+git merge-base --is-ancestor \
+  bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80 HEAD
+test "$(git rev-parse HEAD)" = "REPLACE_WITH_REVIEWED_FULL_SHA"
+
+cd ..
 vcs import . < physical_rosmaster/physical_rosmaster.repos
+test -z "$(git -C ros2_astra_camera status --porcelain)"
+test "$(git -C ros2_astra_camera rev-parse HEAD)" = \
+  "f7e71d9ce806e788cb48d8580aac2c778fba4214"
 
 cd /root/yahboomcar_ws
 source /opt/ros/humble/setup.bash
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y
+)
 ```
 
 The manifest pins `ros2_astra_camera`. Do not build an arbitrary current
@@ -62,28 +84,22 @@ camera-driver branch.
 The default clone is the canonical new-robot path after this architecture is
 merged to `main`. Until then, do not deploy current `main` to `x3-c`; use
 [the ordered recovery runbook](robot_side_next_moves.md) to select one exact,
-published `platform/simulator-parity` head containing runtime commit `a08b097`
-before importing dependencies or building.
+published `platform/simulator-parity` head whose reviewed full SHA contains both
+runtime commit `a08b097` and workstation-validation commit `bc965a6` before
+importing dependencies or building.
 
-Verify the robot-provided motor library:
+Verify the robot-provided motor library with the fail-closed preflight:
 
 ```bash
-python3 - <<'PY'
-import hashlib
-import inspect
-from Rosmaster_Lib import Rosmaster
-
-path = inspect.getsourcefile(Rosmaster)
-with open(path, "rb") as source:
-    digest = hashlib.sha256(source.read()).hexdigest()
-print(path)
-print(digest)
-PY
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/rosmaster_lib_probe.py --hash-only
 ```
 
-If that import fails, restore the Yahboom host/container library integration
-before building. Do not vendor an unknown `Rosmaster_Lib` copy into this
-repository.
+The command must exit `0` and report the supported V3.3.9 digest. If it returns
+nonzero or cannot import the library, stop and restore the Yahboom
+host/container integration before building. Do not vendor an unknown
+`Rosmaster_Lib` copy into this repository or accept a mismatch by visually
+comparing printed output.
 
 The only supported `Rosmaster_Lib.py` SHA256 is
 `e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
@@ -92,7 +108,9 @@ refuses to construct the controller transport when it differs. This is a
 compatibility/version gate for the exact implementation whose private receive
 and parse hooks were reviewed. It is not supply-chain attestation: matching
 bytes do not establish who delivered the file, whether its installation path
-is trusted, or whether the surrounding system is uncompromised.
+is trusted, or whether the surrounding system is uncompromised. Commit
+`bc965a6` makes the standalone preflight return nonzero for an unsupported
+source.
 
 After the vendor constructor returns, `a08b097` applies and verifies a `0.05 s`
 pyserial `write_timeout`, then wraps runtime writes so exceptions and short
@@ -105,8 +123,28 @@ robot physically stopped.
 ## 3. Build from clean generated state
 
 ```bash
+(
+set -eo pipefail
+
 cd /root/yahboomcar_ws
-colcon list --base-paths src/physical_rosmaster
+
+# Moving these trees outside the workspace is recoverable and prevents stale
+# generated state reuse.
+archive_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+generated_archive="/root/rosmaster-workspace-archives/${archive_stamp}-pre-deploy"
+test ! -e "$generated_archive"
+mkdir -p /root/rosmaster-workspace-archives
+mkdir "$generated_archive"
+for generated_tree in build install log; do
+  if [ -e "$generated_tree" ]; then
+    mv -- "$generated_tree" "$generated_archive/"
+  fi
+done
+test ! -e build
+test ! -e install
+test ! -e log
+
+colcon list --base-paths src
 colcon build --symlink-install
 colcon test --packages-select \
   laserscan_to_point_pulisher sllidar_ros2 yahboomcar_astra \
@@ -114,19 +152,31 @@ colcon test --packages-select \
   yahboomcar_description yahboomcar_visual
 colcon test-result --verbose
 source install/setup.bash
+)
 ```
 
-The physical repository must show eight local packages. The external camera
-repository adds `astra_camera` and `astra_camera_msgs` to the workspace.
+Keep the archived generated state until the clean build and test evidence has
+been reviewed; remove it later only as a separate, explicit maintenance action.
+
+The workspace inventory must show exactly eight local packages plus
+`astra_camera` and `astra_camera_msgs`. The external camera-driver worktree must
+be clean and remain at the commit pinned in `physical_rosmaster.repos`.
 
 ## 4. Identify required hardware
 
-On the host and, where appropriate, inside the container:
+On the host:
 
 ```bash
 lsusb
 ls -l /dev/serial/by-id
 udevadm info --attribute-walk --name=/dev/ttyUSB0
+```
+
+Inside the container:
+
+```bash
+source /opt/ros/humble/setup.bash
+source /root/yahboomcar_ws/install/setup.bash
 ros2 run astra_camera list_devices_node
 ```
 
@@ -224,10 +274,10 @@ full contract must be repeated before the live-loss test.
 
 ### Observer-only live motor-controller loss
 
-Runtime commit `a08b097` is still pending this robot-side validation. Keep the
-wheels secured and do not start joystick, keyboard, calibration, or any other
-command source. After strict bringup passes its full baseline, run from the
-repository root:
+The exact reviewed head containing `a08b097` and `bc965a6` is still pending
+this robot-side validation. Keep the wheels secured and do not start joystick,
+keyboard, calibration, or any other command source. After strict bringup passes
+its full baseline, run from the repository root:
 
 ```bash
 export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
@@ -327,5 +377,6 @@ or project behavior by default. It should also:
 Test a future disk guard by temporarily raising its threshold, never by filling
 the robot's storage.
 
-Runtime commit `a08b097` remains pending these robot-side gates. Until they all
-pass, leave the fleet autostart disabled for this new stack.
+The exact reviewed head containing `a08b097` and `bc965a6` remains pending these
+robot-side gates. Until they all pass, leave the fleet autostart disabled for
+this new stack.

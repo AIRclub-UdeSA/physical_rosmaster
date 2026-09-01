@@ -94,6 +94,9 @@ The `vcs` command must already be available; Ubuntu provides it in
 `python3-vcstool`.
 
 ```bash
+(
+set -eo pipefail
+
 mkdir -p ~/rosmaster_physical_ws/src
 cd ~/rosmaster_physical_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
@@ -102,23 +105,36 @@ git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
 
 cd ~/rosmaster_physical_ws
 vcs import src < src/physical_rosmaster/physical_rosmaster.repos
+test -z "$(git -C src/ros2_astra_camera status --porcelain)"
+test "$(git -C src/ros2_astra_camera rev-parse HEAD)" = \
+  "f7e71d9ce806e788cb48d8580aac2c778fba4214"
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
+colcon list --base-paths src
 colcon build --symlink-install
 source install/setup.bash
+)
 ```
 
-The `.repos` file pins Orbbec's `ros2_astra_camera` to `f7e71d9ce806e788cb48d8580aac2c778fba4214`. Do not replace the pin without repeating camera contract validation.
+The `.repos` file pins Orbbec's `ros2_astra_camera` to
+`f7e71d9ce806e788cb48d8580aac2c778fba4214`. The complete workspace inventory
+must contain exactly the eight repository packages plus `astra_camera` and
+`astra_camera_msgs`. Do not replace the pin without repeating camera contract
+validation.
 
 The clone command above describes the eventual canonical setup from `main`.
 Until the simulator-parity work is merged, the current `x3-c` recovery must
-instead deploy one reviewed, published `platform/simulator-parity` head that
-contains runtime commit `a08b097`; follow
+instead deploy one published `platform/simulator-parity` head whose exact full
+SHA has been reviewed and that contains both runtime commit `a08b097` and
+workstation-validation commit `bc965a6`; follow
 [the ordered recovery runbook](docs/robot_side_next_moves.md).
 
 Focused hardware-free checks:
 
 ```bash
+(
+set -eo pipefail
+
 cd ~/rosmaster_physical_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
@@ -132,13 +148,14 @@ colcon test --packages-select \
 colcon test-result --verbose
 
 cd src/physical_rosmaster
-export PYTHONPATH="$PWD/yahboomcar_bringup:$PWD/tools:$PYTHONPATH"
+export PYTHONPATH="$PWD/yahboomcar_bringup:$PWD/tools:${PYTHONPATH:-}"
 python3 -m pytest -q \
   tools/test_rosmaster_lib_probe.py \
   tools/test_motor_live_loss_probe.py \
   tools/test_motor_live_loss_ros_smoke.py \
   tools/test_physical_contract_probe.py \
   tools/test_safe_cmd_vel_pulse.py
+)
 ```
 
 `colcon test` already runs every test in the selected repository packages,
@@ -166,9 +183,23 @@ The expected clone path is `/root/yahboomcar_ws/src/physical_rosmaster` in the
 dependency and is not vendored here. Its source hash verifies the reviewed
 runtime shape after import; it does not establish package provenance or trust.
 
+Before constructing the driver, run the fail-closed installed-source preflight
+from the repository root:
+
+```bash
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/rosmaster_lib_probe.py --hash-only
+```
+
+Continue only if it exits `0` and reports the supported V3.3.9 digest. A
+nonzero result is a deployment blocker; do not substitute visual comparison of
+hash output.
+
 Discover and configure stable hardware identities before launch:
 
 ```bash
+source /opt/ros/humble/setup.bash
+source /root/yahboomcar_ws/install/setup.bash
 ls -l /dev/serial/by-id
 lsusb
 ros2 run astra_camera list_devices_node
@@ -253,14 +284,16 @@ Manual control is capped at `0.20 m/s` linear and `1.0 rad/s` angular, with lowe
 
 ## Rollout status
 
-Autostart remains blocked. Runtime commit `a08b097` has hardware-free
-workstation coverage, but its clean deployment and physical validation on a
-robot are pending. Older robot runs do not validate this runtime.
+Autostart remains blocked. Runtime commit `a08b097` and the robot-validation
+tooling hardened by `bc965a6` have workstation coverage, but their clean
+deployment as one reviewed head and physical validation on a robot are pending.
+Older robot runs do not validate this head.
 
 The gate is:
 
-1. deploy and record one clean reviewed branch head containing runtime commit
-   `a08b097`, with verified stable device identities;
+1. deploy and record one clean branch head at an exact reviewed full SHA that
+   contains both `a08b097` and `bc965a6`, with verified stable device
+   identities;
 2. pass the positive non-motion contract, motor-absent-at-startup gate, restored
    positive contract, observer-only live motor-loss gate, and another restored
    positive contract, in that order;
