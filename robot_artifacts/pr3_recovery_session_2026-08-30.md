@@ -5,9 +5,12 @@ stable device rules, exact source deployment, dependency restoration, clean
 build, isolated tests, charged reboot-stable Astra enumeration in the accepted
 powered-hub topology, the strict pre-motion contract, all three startup-absence
 checks, and their restoration contracts are complete. Live motor-controller
-loss does not fail closed at runtime head `55caf7a`; all motion, operator tools,
-calibration, floor trials, and later acceptance gates are blocked pending a
-versioned driver freshness/device-loss fix and full regression repeat.
+loss does not fail closed at robot runtime head `55caf7a`. Workstation commit
+`a08b097` implements the reviewed remediation and passes workstation tests, but
+has not been deployed or physically validated. All motion, operator tools,
+calibration, floor trials, and later acceptance gates remain blocked pending
+the exact robot-side no-motion regression sequence and a separate bounded
+active-stop validation.
 
 This is the durable session record for continuing the `x3-c` host recovery and
 PR #3 validation. The workstation repository is the source of truth. The robot
@@ -926,6 +929,66 @@ clean build/test and exact deployment followed by the positive contract,
 startup absence, live disconnect, and restoration gates before any motion,
 joystick, keyboard, calibration, watchdog, or floor test.
 
+### Workstation remediation after the live-loss failure
+
+The workstation branch merged current `origin/main` at merge commit `32feb1b`
+and committed the motor remediation as `a08b097` (`fix: fail closed on motor
+feedback loss`). This records code readiness only: `a08b097` has not been
+deployed to or exercised on `x3-c`, and none of the failed `55caf7a` evidence is
+reclassified as a pass.
+
+The new transport watches checksum-valid V3.3.9 report parsing rather than
+cached getter calls. It requires fresh speed/battery (`0x0A`), encoder (`0x0D`),
+and raw IMU (`0x0B` or `0x0E`) streams. Startup timeout, stale feedback,
+receiver exit, parse/cache failure, and observed outbound serial failure are
+terminal. Nonzero motion and peripheral writes are authorized under the same
+transport lock as the operation; controller-derived ROS publication is
+suppressed after terminal failure; an `ERROR` diagnostic is emitted; the driver
+exits; and the strict launch requests whole-platform shutdown. Command timing is
+monotonic, and post-construction serial writes use a validated `0.05` second
+write timeout. The exact supported source digest remains
+`e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
+This post-import digest check is a compatibility/version gate, not a
+supply-chain attestation.
+
+An observer-only `tools/motor_live_loss_probe.py` now requires the full strict
+graph, fresh structured motor diagnostics, stationary feedback, and zero
+`/cmd_vel` publishers/messages before it arms. It records the motor device
+present-to-absent edge, controller-topic quieting, feedback-specific `ERROR`,
+driver exit, and a stable drained strict graph. It creates no publisher,
+service, client, or action and sends no command. Therefore it validates the
+no-motion software contract only; it does not prove that the controller or
+wheels stop after link loss during an active command.
+
+Workstation validation completed with all eight local packages building
+successfully. `colcon test-result --verbose` reported `125 tests, 0 errors, 0
+failures, 3 skipped`; the two focused physical-probe suites reported 44 passes.
+The exact recovered V3.3.9 class was also loaded with a fake serial endpoint to
+confirm the private hooks, digest, monitored runtime write, `0.05` second write
+timeout, and close path. The workstation required
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` to avoid an unrelated user-site
+AnyIO/pytest-version conflict and `ROS_LOG_DIR=/tmp/physical_rosmaster_ros_logs`
+for a writable ROS log directory; these are test-environment controls, not
+robot evidence.
+
+Before cleaning or redeploying the robot, copy the still-container-local
+`/root/rosmaster-recovery-evidence/pr3-2026-09-01-55caf7a-*` records to durable
+storage and hash them. The physical-poweroff journal naming/archival follow-up
+also remains pending; do not silently rename the prior sequence as a proven
+software-shutdown result. Then deploy one exact clean reviewed branch head
+containing `a08b097`, build and test it on the robot, pass the positive contract,
+repeat motor absence at startup, restore and pass the full contract, run the
+observer-only live no-command loss probe, then restore and pass the full
+contract again. Camera and LiDAR absence need not be repeated for this
+motor-only change unless other evidence regresses.
+
+Only after that sequence passes may a separate securely lifted,
+very-low-speed active-link-loss/watchdog trial begin, with a human at the main
+power switch. A full-length host serial write, attempted zero frame, quiet ROS
+graph, or driver exit is not MCU acknowledgement or physical-stop proof. If a
+bounded physical stop is not demonstrated, a controller-side or hardware
+watchdog is required before floor use. Autostart remains blocked.
+
 ## Documentation created in this phase
 
 - [`systemd` SIGILL incident](../docs/troubleshooting/incidents/2026-08-29-x3-c-host-systemd-sigill.md)
@@ -966,10 +1029,20 @@ backup, and storage controls are documented separately from causal claims.
   the full contract after each. Motor startup absence exited code 1 and stopped
   the enclosing launch; its restored five-sample contract passed with no
   observed wheel movement.
-- [ ] Pass live motor-controller loss and its full restoration contract. Runtime
-  `55caf7a` falsely kept the driver healthy and published cached
-  controller-derived data after physical disconnect, so this is the controlling
-  hard failure.
+- [ ] Archive and hash the still-container-local
+  `/root/rosmaster-recovery-evidence/pr3-2026-09-01-55caf7a-*` records and
+  resolve the physical-poweroff journal naming follow-up before cleaning or
+  redeploying the robot.
+- [ ] Deploy one exact clean reviewed head containing workstation remediation
+  `a08b097`; run the robot build/tests, positive contract, motor startup
+  absence, restored full contract, observer-only no-command live-loss probe,
+  and a second restored full contract. Runtime `55caf7a` remains a recorded
+  failure, not a pass.
+- [ ] Prove a bounded physical stop during a separate securely lifted,
+  very-low-speed active-link-loss/watchdog trial. Software-side quieting and
+  process exit do not prove MCU acknowledgement or wheel stop; require a
+  controller-side or hardware watchdog before floor use if this gate cannot be
+  closed.
 - [ ] Repeat the full positive contract after the charged lifted-motion tests.
 - [ ] Pass charged lifted motion and operator-tool safety gates.
 - [ ] Pass repeated measured floor trials.
@@ -986,19 +1059,22 @@ backup, and storage controls are documented separately from causal claims.
 - Do not enable autostart while any PR #3 physical gate remains incomplete.
 - Do not publish motion or start joystick, keyboard, calibration, watchdog, or
   floor tests on runtime `55caf7a`; its live controller-loss behavior is unsafe
-  for acceptance.
+  for acceptance. On a head containing `a08b097`, do not begin the separate
+  active-stop trial until the complete no-command deployment, loss, and
+  restoration sequence passes.
 - Stop at a failed gate; do not weaken strict checks or make an uncommitted
   robot-only fix count as evidence.
 
 ## Next phase
 
 Keep the camera on Yahboom hub downstream port 4 and leave autostart disabled.
-Implement and review a versioned driver fix that stops publishing cached
-controller-derived telemetry, reports non-OK diagnostics, and exits strict
-bringup after sustained live controller loss. Clean-build and test the new
-committed head, deploy that exact revision, then repeat the positive contract,
-startup motor absence, live motor disconnect, and restoration contract before
-any motion. Only after all four pass may charged lifted pulses, watchdog,
-operator tools, calibration, or floor trials resume. Track the driver destructor
-error, Astra shutdown errors, and LiDAR teardown escalation as separate
-unresolved shutdown-quality findings.
+First archive and hash the latest container-local evidence. Publish the
+reviewed branch head containing `a08b097`, deploy that exact clean revision,
+then run the robot build/tests, positive contract, startup motor absence, first
+restoration contract, observer-only no-command live disconnect, and second
+restoration contract. Only after all of those pass may the separate securely
+lifted active-link-loss/watchdog trial begin. Charged lifted pulses, operator
+tools, calibration, and floor trials remain blocked until bounded physical stop
+is demonstrated or an adequate controller-side or hardware watchdog is added.
+Track the driver destructor error, Astra shutdown errors, and LiDAR teardown
+escalation as separate unresolved shutdown-quality findings.

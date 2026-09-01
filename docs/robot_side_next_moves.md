@@ -12,6 +12,28 @@ as historical evidence. Record continuation results in
 Record the exact current PR head used for the next run; do not report a parent
 commit plus uncommitted fixes as the accepted source.
 
+## Workstation remediation checkpoint
+
+Runtime commit `a08b097` replaces the failed `55caf7a` motor path with
+checksum-valid report freshness, observable and bounded post-construction
+serial writes, terminal failure diagnostics, controller-topic suppression, and
+strict-launch exit. It also adds an observer-only no-motion live-loss probe.
+This is workstation-tested code, not robot acceptance evidence: `a08b097` has
+not yet been deployed to or validated on `x3-c`.
+
+The workstation eight-package build completed successfully. The package test
+result is `125 tests, 0 errors, 0 failures, 3 skipped`; the focused observer
+tool suites add 44 passing tests. The exact recovered/public V3.3.9 source is
+compatible with the wrapper and has SHA256
+`e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
+That digest is an installed-source compatibility/version gate evaluated after
+import, not a supply-chain attestation.
+
+The remediation lineage is `origin/platform/simulator-parity` at `7113f07`
+plus `origin/main` at `1d4b94f`, merged as `32feb1b`, followed by runtime commit
+`a08b097`. The runtime commit and this documentation are still local; deploy
+only the eventual reviewed, published branch head and record its full SHA.
+
 The target configuration is still the canonical new-robot setup in the root
 README and [setup guide](setup_guide_ros2_humble_autostart.md): one clean Humble
 workspace, exact robot library, stable hardware identities, manual strict
@@ -22,20 +44,30 @@ creating a second deployment architecture.
 
 ## Required order
 
-1. preserve the previous evidence;
+1. archive the latest live-loss evidence that still exists only in the robot
+   container;
 2. establish a safe, charged, persistent host configuration;
-3. deploy and build a clean current PR head;
-4. repeat the positive sensor contract and the three fail-closed checks;
-5. resolve the uneven lifted-wheel response;
-6. verify operator tools;
-7. perform repeated measured floor trials;
-8. prove simulator/physical consumer parity and finish the handoff.
+3. deploy and build one clean current PR head containing runtime `a08b097`;
+4. pass the positive contract, motor startup absence, a restored positive
+   contract, observer-only live no-command loss, and a second restored positive
+   contract, in that order;
+5. prove bounded physical stop in a separate securely lifted active-loss gate;
+6. resolve the uneven lifted-wheel response;
+7. verify operator tools;
+8. perform repeated measured floor trials;
+9. prove simulator/physical consumer parity and finish the handoff.
 
 Do not move to a later gate because an earlier failure appears unrelated.
 
 ## 1. Preserve the previous evidence
 
 Before cleaning the robot workspace or `/tmp`:
+
+- [ ] Copy the 2026-09-01 post-hub, motor-startup-absence, restoration, and
+  live-motor-loss directories from
+  `/root/rosmaster-recovery-evidence/` in the `rosmaster_humble` container to
+  durable project storage. These latest records are still described by
+  container-local paths and must be archived before a clean deployment.
 
 - [x] Copy the three current PR #3 rosbag `.db3` files, all attempt-1-through-6
   launch logs, contract-probe output, and isolated build/test logs to durable
@@ -109,20 +141,29 @@ without calling `Serial.write()`.
 
 Inside the ROS 2 Humble container:
 
+For the remediation run, do not execute the fetch/pull sequence until the
+reviewed branch containing `a08b097` is published. Both cleanliness checks and
+all three revision checks must succeed after replacing the reviewed-SHA marker.
+
 ```bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
+test -z "$(git status --porcelain)"
 git fetch origin
 git checkout platform/simulator-parity
 git pull --ff-only
-git status --porcelain
+test -z "$(git status --porcelain)"
 git rev-parse HEAD
 git rev-parse origin/platform/simulator-parity
+test "$(git rev-parse HEAD)" = \
+  "$(git rev-parse origin/platform/simulator-parity)"
+git merge-base --is-ancestor a08b097 HEAD
+test "$(git rev-parse HEAD)" = "REPLACE_WITH_REVIEWED_FULL_SHA"
 ```
 
 - [x] `git status --porcelain` is empty.
 - [x] The robot `HEAD` equals its cached `origin/platform/simulator-parity` at
   `55caf7a2a572aae0ad2682e265147c46e525921c`, with an empty worktree. The
-  workstation and server branch now resolve to
+  workstation and server branch at that historical checkpoint resolved to
   `3a99fb5f6665f50cf811262fb2c2dc1893895aed`; the intervening commits change
   documentation and evidence only, so the runtime source under test remains
   exact `55caf7a` content.
@@ -137,6 +178,20 @@ git rev-parse origin/platform/simulator-parity
   failures, and 3 intentional skips.
 - [x] Reconfirm the installed `Rosmaster_Lib` SHA256 is
   `e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
+
+Those checks describe the historical `55caf7a` run. For the remediation run:
+
+- [ ] Archive the container-local evidence listed in Section 1 before cleaning
+  generated state.
+- [ ] Fetch only after the reviewed branch containing `a08b097` is published;
+  record the new exact local and remote head and require an empty worktree.
+- [ ] Clean generated state, import the pinned Astra revision, build all ten
+  workspace packages, and run the required eight local-package test selection.
+- [ ] Require zero build failures, zero test errors, and zero test failures;
+  retain the logs rather than borrowing the workstation result as robot
+  evidence.
+- [ ] Run `tools/rosmaster_lib_probe.py` and require the supported V3.3.9 hash
+  before constructing the runtime driver.
 
 Do not edit code on the robot during acceptance. If a fix is required, stop the
 gate, implement and commit it on the branch, then restart this section from a
@@ -154,7 +209,14 @@ export ROSMASTER_ASTRA_SERIAL=ACRC64300ET
 ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
 ```
 
-Run `python3 tools/physical_contract_probe.py` from a second sourced shell.
+From a second shell, run:
+
+```bash
+source /opt/ros/humble/setup.bash
+source /root/yahboomcar_ws/install/setup.bash
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/physical_contract_probe.py
+```
 
 - [ ] The complete positive contract passes twice: once before motion and once
   after the lifted tests. The pre-motion half is complete at clean runtime head
@@ -177,33 +239,68 @@ Run `python3 tools/physical_contract_probe.py` from a second sourced shell.
   partially initialized driver destructor `AttributeError`, Astra exit `-6`,
   and LiDAR teardown findings; track those separately from the successful
   startup fail-closed result.
+- [ ] On the exact remediated head, repeat motor absence at startup, reconnect
+  the controller, start a clean strict launch, and pass the full contract before
+  arming the live-loss probe.
 - [ ] Live motor-controller loss fails closed. Runtime head `55caf7a` fails this
   gate: after the physical controller disappeared, the Rosmaster receive thread
   raised `SerialException`, but the driver stayed alive, diagnostics remained
   level `OK`/healthy with zero failure counters, and cached `/joint_states`,
   `/voltage`, and `/vel_raw` continued to look fresh. No command publisher was
-  present, but stale healthy feedback is not acceptable.
+  present, but stale healthy feedback is not acceptable. Runtime commit
+  `a08b097` is the workstation remediation and remains unvalidated on the
+  robot. With the wheels secured and the full strict graph healthy, run:
+
+  ```bash
+  export ROSMASTER_MOTOR_PORT=/dev/robot/motor
+  mkdir -p /root/rosmaster-recovery-evidence
+  python3 tools/motor_live_loss_probe.py \
+    --device "$ROSMASTER_MOTOR_PORT" \
+    --confirm-wheels-secured \
+    --output /root/rosmaster-recovery-evidence/motor-live-loss.json
+  ```
+
+  Wait for `ARMED`, disconnect only `/dev/robot/motor`, and do not reconnect it
+  until the probe finishes. A pass requires a stable full-platform baseline,
+  no `/cmd_vel` publisher or message, all controller-derived topics quiet by
+  the deadline, a structured feedback-loss `ERROR`, driver exit, and stable
+  teardown of every strict-platform publisher. This observer sends no command
+  and does not prove physical stop from an active command.
 - [ ] After each absence test, restore the device and pass the full contract
-  before continuing. Camera, LiDAR, and startup-motor restoration have passed
-  the full positive contract. The motor identity and passive zero telemetry
-  returned after the live-loss shutdown, but its post-fix full-contract repeat
-  remains, so this aggregate item stays unchecked.
+  before continuing. Camera, LiDAR, and startup-motor restoration passed on the
+  historical runtime. The remediated head still requires one full restoration
+  after repeated motor-startup absence and a second after live loss, so this
+  aggregate item stays unchecked.
 
-Perform device-absence checks one at a time with power controlled safely. Never
-disconnect a motor-controller interface while a command source exists.
+Perform device-absence checks one at a time with power controlled safely. The
+camera-absence and LiDAR-absence tests need not be repeated for the motor-only
+`a08b097` change unless deployment, launch, or positive-contract evidence shows
+a regression. Motor startup absence, live no-command loss, and restoration are
+mandatory.
 
-The current motor driver does not detect sustained live controller loss, and
-the contract probe can continue receiving falsely fresh controller-derived
-topics.
-Stop here on runtime `55caf7a`. Do not start any motion, joystick, keyboard,
-calibration, watchdog, or floor gate until a versioned freshness/device-loss fix
-has passed clean build/test, deployment, startup absence, live disconnect, and
-restoration tests.
+Stop here until the exact deployed head containing `a08b097` passes clean robot
+build/test, the positive contract, startup motor absence, a restored positive
+contract, observer-only live loss, and a second restored positive contract. Do
+not treat the no-motion probe as permission for general motion.
 
-## 5. Resolve the weak and uneven lifted-wheel response
+## 5. Prove bounded active-motion stop
 
-This entire section is blocked by the live motor-controller-loss failure on
-runtime `55caf7a`.
+Only after the no-motion sequence passes, secure the robot fully lifted, keep a
+human at the main power switch, use one audited very-low-speed command source,
+and perform a separately recorded controller-link-loss/watchdog trial. Measure
+whether the wheels physically stop within the reviewed bound; a host serial
+write completing, a zero-command attempt, process exit, or quiet ROS graph is
+not controller acknowledgement and is not proof of physical stop. If bounded
+physical stop is not demonstrated, require a controller-side or hardware
+watchdog before any floor use. Do not combine this active trial with
+`motor_live_loss_probe.py`, whose pre-arm contract correctly rejects every
+command publisher and message.
+
+## 6. Resolve the weak and uneven lifted-wheel response
+
+This entire section remains blocked until the `a08b097` no-motion sequence,
+restoration contract, and separate active-motion physical-stop gate above pass
+on the robot.
 
 During the post-hub strict no-command bringup, two contract probes, and sensor
 soak, the operator observed no wheel movement. This establishes quiet startup
@@ -254,11 +351,11 @@ Track the Astra parameter-undeclare shutdown messages and SLLidar SIGTERM
 escalation separately. They block shutdown-quality acceptance if they prevent a
 predictable clean stop, but they do not explain uneven wheel motion.
 
-## 6. Complete operator-tool safety
+## 7. Complete operator-tool safety
 
-Joystick, keyboard, calibration, and watchdog testing are blocked by the live
-motor-controller-loss failure until the fixed driver passes the Section 4
-disconnect and restoration gates.
+Joystick, keyboard, calibration, and routine watchdog testing remain blocked
+until the remediated driver passes the Section 4 no-motion and restoration gates
+and the Section 5 active physical-stop gate.
 
 Run one command source at a time with the wheels lifted:
 
@@ -272,10 +369,11 @@ Run one command source at a time with the wheels lifted:
 - [ ] The motor watchdog still stops an interrupted stream within its configured
   timeout.
 
-## 7. Perform measured floor acceptance
+## 8. Perform measured floor acceptance
 
-Floor testing is blocked by the live motor-controller-loss failure and by all
-remaining lifted-motion and operator-tool gates.
+Floor testing is blocked by the pending `a08b097` robot validation, bounded
+active physical-stop proof, and all remaining lifted-motion and operator-tool
+gates.
 
 Use a clear level area, a human observer, the tested stop path, one command
 publisher, conservative bounds, and an external distance/heading measurement.
@@ -293,7 +391,7 @@ Separate repeated systematic odometry error from normal mecanum slip. Propose
 geometry or covariance changes only from repeated measured evidence and review
 them as a new code change.
 
-## 8. Prove parity and finish PR #3
+## 9. Prove parity and finish PR #3
 
 - [ ] Record one external consumer repository and commit.
 - [ ] Run it against simulator commit `772ba25`.
@@ -318,3 +416,6 @@ perform host/device/storage preflight checks, preserve logs, and stop
 gracefully. It must not start any command publisher or application behavior by
 default, and it requires its own reboot, failure-injection, and shutdown
 validation.
+
+The immediate next action is evidence archival followed by clean deployment of
+a reviewed branch head containing `a08b097`; it is not motion or autostart.

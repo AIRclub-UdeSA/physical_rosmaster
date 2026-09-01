@@ -44,6 +44,8 @@ Inside the container:
 mkdir -p /root/yahboomcar_ws/src
 cd /root/yahboomcar_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
+# For the current pre-merge x3-c recovery, stop here and use the ordered
+# recovery runbook to select the reviewed platform/simulator-parity head first.
 vcs import . < physical_rosmaster/physical_rosmaster.repos
 
 cd /root/yahboomcar_ws
@@ -55,15 +57,48 @@ rosdep install --from-paths src --ignore-src -r -y
 The manifest pins `ros2_astra_camera`. Do not build an arbitrary current
 camera-driver branch.
 
+The default clone is the canonical new-robot path after this architecture is
+merged to `main`. Until then, do not deploy current `main` to `x3-c`; use
+[the ordered recovery runbook](robot_side_next_moves.md) to select one exact,
+published `platform/simulator-parity` head containing runtime commit `a08b097`
+before importing dependencies or building.
+
 Verify the robot-provided motor library:
 
 ```bash
-python3 -c "from Rosmaster_Lib import Rosmaster; print(Rosmaster)"
+python3 - <<'PY'
+import hashlib
+import inspect
+from Rosmaster_Lib import Rosmaster
+
+path = inspect.getsourcefile(Rosmaster)
+with open(path, "rb") as source:
+    digest = hashlib.sha256(source.read()).hexdigest()
+print(path)
+print(digest)
+PY
 ```
 
 If that import fails, restore the Yahboom host/container library integration
 before building. Do not vendor an unknown `Rosmaster_Lib` copy into this
 repository.
+
+The only supported `Rosmaster_Lib.py` SHA256 is
+`e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
+Runtime commit `a08b097` checks this digest after importing the library and
+refuses to construct the controller transport when it differs. This is a
+compatibility/version gate for the exact implementation whose private receive
+and parse hooks were reviewed. It is not supply-chain attestation: matching
+bytes do not establish who delivered the file, whether its installation path
+is trusted, or whether the surrounding system is uncompromised.
+
+After the vendor constructor returns, `a08b097` applies and verifies a `0.05 s`
+pyserial `write_timeout`, then wraps runtime writes so exceptions and short
+writes become terminal driver failures. The V3.3.9 constructor's UART-servo
+torque-enable write occurs before that wrapper is installed. A completed
+runtime host write also proves only that the serial layer accepted the frame;
+it is not an acknowledgement that the motor controller executed it or that the
+robot physically stopped.
 
 ## 3. Build from clean generated state
 
@@ -71,6 +106,11 @@ repository.
 cd /root/yahboomcar_ws
 colcon list --base-paths src/physical_rosmaster
 colcon build --symlink-install
+colcon test --packages-select \
+  laserscan_to_point_pulisher sllidar_ros2 yahboomcar_astra \
+  yahboomcar_base_node yahboomcar_bringup yahboomcar_ctrl \
+  yahboomcar_description yahboomcar_visual
+colcon test-result --verbose
 source install/setup.bash
 ```
 
@@ -94,6 +134,14 @@ Record exact model, vendor/product IDs, and stable identity for:
 - Slamtec A1 serial adapter;
 - Astra-family RGB-D camera.
 
+For `x3-c`, the accepted camera topology is the powered Yahboom hub,
+downstream port 4. In that topology, one cold boot followed by three consecutive
+warm boots enumerated both Astra USB functions, `2bc5:060f` for depth and
+`2bc5:050f` for UVC/RGB, without touching or reconnecting any cable. Preserve
+that topology for `x3-c`. This is evidence for that robot, hub, power path, and
+cable; it is not a universal instruction that every X3 must use port 4. Record
+and boot-validate the stable topology of each additional robot independently.
+
 If no Orbbec/Astra device appears, strict simulator parity fails. Stop here; do
 not prepare autostart.
 
@@ -111,9 +159,9 @@ the documented `KERNELS` fallback and verify that identity after reboot.
 In the container shell used for manual launch:
 
 ```bash
-export ROSMASTER_MOTOR_PORT=/dev/serial/by-id/<motor-controller-id>
+export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
 export ROSMASTER_LIDAR_PORT=/dev/robot/lidar
-export ROSMASTER_ASTRA_SERIAL=<astra-serial>
+export ROSMASTER_ASTRA_SERIAL="REPLACE_WITH_ASTRA_SERIAL"
 ```
 
 The camera serial may be temporarily omitted only during discovery with exactly
@@ -134,6 +182,8 @@ ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
 Do not start any command publisher. In another shell:
 
 ```bash
+source /opt/ros/humble/setup.bash
+source /root/yahboomcar_ws/install/setup.bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
 python3 tools/physical_contract_probe.py
 ```
@@ -155,6 +205,53 @@ Acceptance requires:
 Required driver exit or camera startup failure must stop bringup. Fix
 hardware/dependencies rather than making sensors optional.
 
+### Required devices absent at startup
+
+On every new X3, test the camera, LiDAR, and motor controller separately. Keep
+the wheels secured and start strict bringup with exactly one required device
+absent. Camera and LiDAR failure must stop strict bringup; with the motor absent,
+the driver must never become healthy, must exit after the startup-feedback
+deadline, and the strict graph must drain. After each test, restore the device,
+restart from a clean launch, and pass the full physical contract before
+continuing.
+
+For the current motor-only `x3-c` remediation, the previously accepted camera
+and LiDAR startup-absence results may be carried forward unless deployment or
+positive-contract evidence regresses. Motor startup absence and its restored
+full contract must be repeated before the live-loss test.
+
+### Observer-only live motor-controller loss
+
+Runtime commit `a08b097` is still pending this robot-side validation. Keep the
+wheels secured and do not start joystick, keyboard, calibration, or any other
+command source. After strict bringup passes its full baseline, run from the
+repository root:
+
+```bash
+export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
+mkdir -p /root/rosmaster-recovery-evidence
+python3 tools/motor_live_loss_probe.py \
+  --device "$ROSMASTER_MOTOR_PORT" \
+  --confirm-wheels-secured \
+  --output /root/rosmaster-recovery-evidence/motor-live-loss.json
+```
+
+Acceptance requires all of the following in the probe result:
+
+- a complete, fresh, stationary baseline for every controller-derived topic;
+- no `/cmd_vel` publisher and no `/cmd_vel` message before or after loss;
+- controller-derived topics become quiet after the motor device disappears;
+- motor diagnostics reach `ERROR` with structured failed freshness evidence;
+- `driver_node` exits;
+- the strict ROS graph drains and remains stably drained for the probe's
+  observation window; and
+- after restoring the controller, a clean strict launch passes the full
+  physical contract again.
+
+This observer-only, no-command test proves ROS data, diagnostic, process-exit,
+and graph-drain behavior. It does **not** prove that a robot already moving will
+physically stop when feedback or the serial link is lost.
+
 ## 7. Lifted and floor motion gates
 
 Follow [odometry_validation.md](odometry_validation.md). Use only the bounded
@@ -169,6 +266,21 @@ Verify:
 - joystick held deadman, release stop, malformed-input protection, and timeout;
 - keyboard timeout;
 - calibration remains inert unless explicitly activated.
+
+After the observer-only live-loss gate passes, perform a separate active safety
+gate with all four wheels securely lifted, the main power switch immediately
+reachable, an observer present, and only one very-low-speed command source.
+First prove the software command watchdog produces a bounded physical stop when
+the command stream ends while the link remains healthy. Then, under the same
+restrained conditions, test active controller-link loss against a
+predeclared stop-time bound and record command, wheel motion, diagnostics, and
+power intervention. Cut the main switch immediately if behavior is unexpected
+or the bound is exceeded.
+
+Host write completion is not controller execution acknowledgement. If the
+lifted active-link-loss test does not demonstrate a bounded physical stop, add
+and validate a controller/firmware or independent hardware watchdog before any
+floor use. Do not treat repeated host zero writes as a substitute.
 
 Then repeat conservative floor trials with external observations. Do not tune
 geometry or covariance from visual impression alone.
@@ -188,7 +300,12 @@ and ground truth are excluded.
 Autostart work may begin only when one X3 has passed:
 
 - full non-motion probe;
+- camera-, LiDAR-, and motor-absent startup gates with a restored full contract
+  after each (subject only to the documented current `x3-c` exception);
+- observer-only motor live-loss and its restored full contract;
 - lifted motion and safety gates;
+- bounded lifted active-link-loss behavior, either directly or through a
+  validated controller/hardware watchdog;
 - bounded floor gates;
 - simulator/physical consumer acceptance;
 - stable motor, LiDAR, and camera identity configuration.
@@ -208,4 +325,5 @@ or project behavior by default. It should also:
 Test a future disk guard by temporarily raising its threshold, never by filling
 the robot's storage.
 
-Until then, leave the fleet autostart disabled for this new stack.
+Runtime commit `a08b097` remains pending these robot-side gates. Until they all
+pass, leave the fleet autostart disabled for this new stack.
