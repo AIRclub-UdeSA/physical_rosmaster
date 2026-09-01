@@ -23,6 +23,7 @@ checks are intentionally replaced with physical-hardware checks.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import math
 import struct
 import sys
@@ -91,6 +92,25 @@ REQUIRED_DIAGNOSTIC_SOURCES = {
 }
 
 
+@dataclass(frozen=True)
+class RequiredDiagnosticObservation:
+    """Latest required status and its local monotonic receive time."""
+
+    status: DiagnosticStatus
+    received_at: float
+
+
+def finite_positive(value, name):
+    """Return a finite positive float or reject an unsafe probe limit."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError("%s must be finite and positive" % name) from error
+    if not math.isfinite(parsed) or parsed <= 0.0:
+        raise ValueError("%s must be finite and positive" % name)
+    return parsed
+
+
 class PhysicalContractProbe(Node):
     """Collect consecutive messages and validate the hardware contract."""
 
@@ -98,16 +118,23 @@ class PhysicalContractProbe(Node):
         super().__init__("physical_contract_probe")
         self.declare_parameter("timeout", 35.0)
         self.declare_parameter("samples", 5)
+        self.declare_parameter("diagnostic_max_age", 2.0)
         self.timeout = float(self.get_parameter("timeout").value)
         self.samples = max(3, int(self.get_parameter("samples").value))
+        self.diagnostic_max_age = finite_positive(
+            self.get_parameter("diagnostic_max_age").value,
+            "diagnostic_max_age",
+        )
         self.required_counts = {
             topic: 2 if topic == "/tf_static" else self.samples
             for topic in TOPIC_TYPES
         }
         self.messages = {topic: [] for topic in self.required_counts}
         self.observed_dynamic_tf_edges = set()
-        self.started_at = time.monotonic()
+        self._monotonic_clock = time.monotonic
+        self.started_at = self._monotonic_clock()
         self.first_arrivals = {}
+        self.latest_required_diagnostics = {}
         self.subscription_handles = []
 
         default_qos = QoSProfile(depth=20)
@@ -149,7 +176,8 @@ class PhysicalContractProbe(Node):
 
     def capture(self, topic, message):
         """Keep bounded samples and track the canonical dynamic TF edge."""
-        self.first_arrivals.setdefault(topic, time.monotonic())
+        received_at = self._monotonic_clock()
+        self.first_arrivals.setdefault(topic, received_at)
         if topic == "/tf":
             self.observed_dynamic_tf_edges.update(
                 (
@@ -158,18 +186,52 @@ class PhysicalContractProbe(Node):
                 )
                 for transform in message.transforms
             )
-        if len(self.messages[topic]) < self.required_counts[topic]:
+        if topic == "/diagnostics":
+            for status in message.status:
+                if status.name in REQUIRED_DIAGNOSTIC_SOURCES:
+                    self.latest_required_diagnostics[status.name] = (
+                        RequiredDiagnosticObservation(status, received_at)
+                    )
+            self.messages[topic].append(message)
+            del self.messages[topic][:-self.required_counts[topic]]
+        elif len(self.messages[topic]) < self.required_counts[topic]:
             self.messages[topic].append(message)
 
     def complete(self):
         """Return whether all messages and odometry TF were observed."""
+        diagnostic_age_errors = self.required_diagnostic_age_errors(
+            self._monotonic_clock()
+        )
         return (
             all(
                 len(self.messages[topic]) >= count
                 for topic, count in self.required_counts.items()
             )
             and REQUIRED_DYNAMIC_TF_EDGE in self.observed_dynamic_tf_edges
+            and REQUIRED_DIAGNOSTIC_SOURCES.issubset(
+                self.latest_required_diagnostics
+            )
+            and not diagnostic_age_errors
         )
+
+    def required_diagnostic_age_errors(self, now):
+        """Return receive-age errors for independently tracked owners."""
+        errors = []
+        for name in REQUIRED_DIAGNOSTIC_SOURCES & set(
+            self.latest_required_diagnostics
+        ):
+            observation = self.latest_required_diagnostics[name]
+            age = now - observation.received_at
+            if not math.isfinite(age) or age < 0.0:
+                errors.append(
+                    "/diagnostics %s has invalid monotonic receive age" % name
+                )
+            elif age > self.diagnostic_max_age:
+                errors.append(
+                    "/diagnostics %s is %.3fs old; maximum is %.3fs"
+                    % (name, age, self.diagnostic_max_age)
+                )
+        return errors
 
     @staticmethod
     def stamp_seconds(message):
@@ -294,13 +356,16 @@ class PhysicalContractProbe(Node):
 
     def validate_diagnostics(self, errors):
         """Require current healthy status from both hardware-facing owners."""
-        latest_status = {}
-        for message in self.messages["/diagnostics"]:
-            for status in message.status:
-                latest_status[status.name] = status
+        latest_status = {
+            name: observation.status
+            for name, observation in self.latest_required_diagnostics.items()
+        }
         missing = REQUIRED_DIAGNOSTIC_SOURCES - set(latest_status)
         if missing:
             errors.append("/diagnostics missing %s" % sorted(missing))
+        errors.extend(
+            self.required_diagnostic_age_errors(self._monotonic_clock())
+        )
         for name in REQUIRED_DIAGNOSTIC_SOURCES & set(latest_status):
             status = latest_status[name]
             if status.level != DiagnosticStatus.OK:
@@ -308,6 +373,58 @@ class PhysicalContractProbe(Node):
                     "/diagnostics %s is level %d: %s"
                     % (name, status.level, status.message)
                 )
+        motor_name = (
+            "yahboomcar_bringup: motor controller and onboard sensors"
+        )
+        motor_status = latest_status.get(motor_name)
+        if motor_status is not None and motor_status.level == DiagnosticStatus.OK:
+            values = {item.key: item.value for item in motor_status.values}
+            if values.get("feedback_state") != "healthy":
+                errors.append(
+                    "/diagnostics motor feedback_state is not healthy"
+                )
+            try:
+                sequence = int(values["feedback_report_sequence"])
+            except (KeyError, TypeError, ValueError):
+                errors.append(
+                    "/diagnostics motor feedback_report_sequence is invalid"
+                )
+            else:
+                if sequence <= 0:
+                    errors.append(
+                        "/diagnostics motor has no checksum-valid reports"
+                    )
+            try:
+                feedback_timeout = float(values["feedback_timeout_seconds"])
+            except (KeyError, TypeError, ValueError):
+                feedback_timeout = math.nan
+                errors.append(
+                    "/diagnostics motor feedback timeout is invalid"
+                )
+            for channel in ("speed", "encoder", "imu_raw"):
+                age_key = "feedback_%s_age_seconds" % channel
+                stale_key = "feedback_%s_stale" % channel
+                try:
+                    age = float(values[age_key])
+                except (KeyError, TypeError, ValueError):
+                    errors.append(
+                        "/diagnostics motor %s report age is invalid" % channel
+                    )
+                    continue
+                if (
+                    not math.isfinite(age)
+                    or age < 0.0
+                    or not math.isfinite(feedback_timeout)
+                    or feedback_timeout <= 0.0
+                    or age > feedback_timeout
+                ):
+                    errors.append(
+                        "/diagnostics motor %s report is not fresh" % channel
+                    )
+                if values.get(stale_key, "").lower() != "false":
+                    errors.append(
+                        "/diagnostics motor %s stale flag is not false" % channel
+                    )
 
     def validate(self):
         errors = []

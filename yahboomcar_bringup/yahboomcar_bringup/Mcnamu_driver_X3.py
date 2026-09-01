@@ -18,7 +18,8 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
+import time
+from typing import Callable, Optional
 
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
@@ -27,18 +28,34 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState, MagneticField
 from std_msgs.msg import Bool, Float32, Int32
 
-from Rosmaster_Lib import Rosmaster
-
+from .rosmaster_transport import create_verified_rosmaster_transport
+from .rosmaster_transport import RosmasterTransport
+from .rosmaster_transport import RosmasterTransportError
+from .rosmaster_transport import TransportState
+from .rosmaster_transport import TransportStatus
 from .x3_driver_utils import compute_encoder_deltas
 from .x3_driver_utils import map_encoder_counts
 from .x3_driver_utils import MotionSafetyController
 from .x3_driver_utils import validate_encoder_config
 
 
+ControllerFactory = Callable[..., RosmasterTransport]
+
+
+def _create_controller_transport(**kwargs) -> RosmasterTransport:
+    """Load the robot-only vendor dependency and wrap its receive path."""
+    return create_verified_rosmaster_transport(**kwargs)
+
+
 class YahboomCarDriver(Node):
     """Bridge ROS commands and telemetry to the X3 motor controller."""
 
-    def __init__(self, name: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        controller_factory: Optional[ControllerFactory] = None,
+        monotonic_clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         """Initialize controller I/O, safety state, and ROS interfaces."""
         super().__init__(name)
 
@@ -54,7 +71,10 @@ class YahboomCarDriver(Node):
         self.declare_parameter("encoder_order", [0, 2, 1, 3])
         self.declare_parameter("encoder_signs", [1.0, 1.0, 1.0, 1.0])
         self.declare_parameter("encoder_max_delta_ticks", 5000)
-        self.declare_parameter("max_consecutive_read_failures", 10)
+        self.declare_parameter("feedback_startup_timeout", 2.0)
+        self.declare_parameter("feedback_timeout", 0.5)
+        self.declare_parameter("feedback_failure_exit_delay", 0.2)
+        self.declare_parameter("serial_write_timeout", 0.05)
 
         self.car_type = str(self.get_parameter("car_type").value)
         self.imu_link = str(self.get_parameter("imu_link").value)
@@ -72,18 +92,43 @@ class YahboomCarDriver(Node):
         self.encoder_max_delta_ticks = int(
             self.get_parameter("encoder_max_delta_ticks").value
         )
-        self.max_consecutive_read_failures = int(
-            self.get_parameter("max_consecutive_read_failures").value
+        self.feedback_startup_timeout = float(
+            self.get_parameter("feedback_startup_timeout").value
         )
+        self.feedback_timeout = float(
+            self.get_parameter("feedback_timeout").value
+        )
+        self.feedback_failure_exit_delay = float(
+            self.get_parameter("feedback_failure_exit_delay").value
+        )
+        self.serial_write_timeout = float(
+            self.get_parameter("serial_write_timeout").value
+        )
+        self._monotonic_clock = monotonic_clock
 
-        if self.encoder_cpr <= 0.0:
-            raise ValueError("encoder_cpr must be positive")
+        if not math.isfinite(self.encoder_cpr) or self.encoder_cpr <= 0.0:
+            raise ValueError("encoder_cpr must be finite and positive")
         if self.encoder_max_delta_ticks <= 0:
             raise ValueError("encoder_max_delta_ticks must be positive")
-        if self.cmd_vel_timeout <= 0.0:
-            raise ValueError("cmd_vel_timeout must be positive")
-        if self.max_consecutive_read_failures <= 0:
-            raise ValueError("max_consecutive_read_failures must be positive")
+        if not math.isfinite(self.cmd_vel_timeout) or self.cmd_vel_timeout <= 0.0:
+            raise ValueError("cmd_vel_timeout must be finite and positive")
+        for parameter_name, parameter_value in (
+            ("xlinear_limit", self.xlinear_limit),
+            ("ylinear_limit", self.ylinear_limit),
+            ("angular_limit", self.angular_limit),
+        ):
+            if not math.isfinite(parameter_value) or parameter_value < 0.0:
+                raise ValueError(
+                    "%s must be finite and nonnegative" % parameter_name
+                )
+        for parameter_name, parameter_value in (
+            ("feedback_startup_timeout", self.feedback_startup_timeout),
+            ("feedback_timeout", self.feedback_timeout),
+            ("feedback_failure_exit_delay", self.feedback_failure_exit_delay),
+            ("serial_write_timeout", self.serial_write_timeout),
+        ):
+            if not math.isfinite(parameter_value) or parameter_value <= 0.0:
+                raise ValueError("%s must be finite and positive" % parameter_name)
         validate_encoder_config(self.encoder_order, self.encoder_signs)
 
         self.create_subscription(Twist, "cmd_vel", self.cmd_vel_callback, 1)
@@ -106,46 +151,69 @@ class YahboomCarDriver(Node):
             DiagnosticArray, "/diagnostics", 10
         )
 
-        self.car = Rosmaster(com=self.serial_port)
-        self.car.set_car_type(1)
-        self.car.create_receive_threading()
-
         self.previous_encoders: Optional[tuple[int, int, int, int]] = None
         self.previous_encoder_time = None
         self.joint_positions = [0.0, 0.0, 0.0, 0.0]
-        self.encoder_fault_active = False
-        self.encoder_failure_count = 0
-        self.telemetry_failure_count = 0
-        self.last_complete_telemetry_time = None
+        self.feedback_failure_observed_at: Optional[float] = None
+        self.feedback_failure_reason: Optional[str] = None
+        self.feedback_failure_exit_checks = 0
+        self.failure_stop_attempts = 0
+        self.last_stop_attempt = "not required"
 
-        self.motion_safety = MotionSafetyController(
-            self.set_motion,
-            self.xlinear_limit,
-            self.ylinear_limit,
-            self.angular_limit,
-            self.cmd_vel_timeout,
+        factory = controller_factory or _create_controller_transport
+        self.transport = factory(
+            com=self.serial_port,
+            clock=self._monotonic_clock,
+            startup_timeout=self.feedback_startup_timeout,
+            stale_timeout=self.feedback_timeout,
+            write_timeout=self.serial_write_timeout,
         )
-        self.stop_motion(repeat=3)
+        self.car = self.transport.vendor
+        try:
+            self.car.set_car_type(1)
+            self.transport.start()
+            self.motion_safety = MotionSafetyController(
+                self.set_motion,
+                self.xlinear_limit,
+                self.ylinear_limit,
+                self.angular_limit,
+                self.cmd_vel_timeout,
+            )
+            self.stop_motion(repeat=3)
 
-        self.data_timer = self.create_timer(0.1, self.publish_data)
-        self.watchdog_timer = self.create_timer(
-            0.05, self.check_cmd_vel_watchdog
-        )
-        self.health_timer = self.create_timer(1.0, self.publish_health)
+            self.data_timer = self.create_timer(0.1, self.publish_data)
+            self.watchdog_timer = self.create_timer(
+                0.05, self.check_cmd_vel_watchdog
+            )
+            self.health_timer = self.create_timer(1.0, self.publish_health)
+        except BaseException:
+            try:
+                if hasattr(self, "motion_safety"):
+                    self.best_effort_stop_motion(repeat=3)
+            finally:
+                self.transport.close()
+            raise
 
         self.get_logger().info(
             "X3 driver ready: serial_port=%s, cmd_vel_timeout=%.3fs, "
-            "encoder_order=%s, encoder_signs=%s"
+            "feedback_timeout=%.3fs, encoder_order=%s, encoder_signs=%s"
             % (
                 self.serial_port,
                 self.cmd_vel_timeout,
+                self.feedback_timeout,
                 self.encoder_order,
                 self.encoder_signs,
             )
         )
 
-    def publish_diagnostic(self, level: int, message: str) -> None:
-        """Publish standard motor, encoder, and IMU hardware health."""
+    def publish_diagnostic(
+        self,
+        level: int,
+        message: str,
+        transport_status: Optional[TransportStatus] = None,
+    ) -> None:
+        """Publish standard health with actual report-freshness evidence."""
+        feedback = transport_status or self.transport.status()
         diagnostic = DiagnosticArray()
         diagnostic.header.stamp = self.get_clock().now().to_msg()
         status = DiagnosticStatus()
@@ -153,69 +221,261 @@ class YahboomCarDriver(Node):
         status.name = "yahboomcar_bringup: motor controller and onboard sensors"
         status.message = message
         status.hardware_id = self.serial_port
+        values = {
+            "feedback_state": feedback.state.value,
+            "feedback_reason": feedback.reason,
+            "feedback_report_sequence": str(feedback.report_sequence),
+            "feedback_timeout_seconds": "%.6f" % self.feedback_timeout,
+            "serial_write_timeout_seconds": "%.6f"
+            % self.serial_write_timeout,
+            "serial_write_failure_count": str(
+                getattr(self.transport, "serial_write_failure_count", 0)
+            ),
+            "latest_serial_write_failure": str(
+                getattr(self.transport, "latest_serial_write_failure", None)
+                or "none"
+            ),
+            "stop_attempt": self.last_stop_attempt,
+        }
+        stale_channels = []
+        for channel in ("speed", "encoder", "imu_raw"):
+            age = feedback.report_ages.get(channel)
+            stale = age is None or age > self.feedback_timeout
+            if stale:
+                stale_channels.append(channel)
+            values["feedback_%s_age_seconds" % channel] = (
+                "unknown" if age is None else "%.6f" % age
+            )
+            values["feedback_%s_stale" % channel] = str(stale).lower()
+        values["feedback_stale_channels"] = ",".join(stale_channels)
         status.values = [
-            KeyValue(
-                key="encoder_consecutive_failures",
-                value=str(self.encoder_failure_count),
-            ),
-            KeyValue(
-                key="telemetry_consecutive_failures",
-                value=str(self.telemetry_failure_count),
-            ),
+            KeyValue(key=key, value=value) for key, value in values.items()
         ]
         diagnostic.status = [status]
         self.diagnostic_publisher.publish(diagnostic)
 
     def publish_health(self) -> None:
-        """Report liveness even when the health state has not changed."""
-        if self.encoder_failure_count or self.telemetry_failure_count:
-            self.publish_diagnostic(
-                DiagnosticStatus.ERROR,
-                "Motor controller feedback has read failures",
-            )
+        """Report receive-path health even when the state has not changed."""
+        feedback = self.transport.status()
+        if feedback.state is TransportState.HEALTHY:
+            try:
+                self.transport.perform_while_healthy(
+                    "healthy diagnostic publication",
+                    lambda _car: self.publish_diagnostic(
+                        DiagnosticStatus.OK,
+                        "Fresh motor, encoder, and onboard-sensor reports "
+                        "are healthy",
+                        feedback,
+                    ),
+                )
+            except Exception:
+                current = self.transport.status()
+                if current.state is TransportState.FAILED:
+                    self._observe_feedback_failure(current, allow_exit=False)
             return
-        if self.last_complete_telemetry_time is None:
+        if feedback.state in (TransportState.CREATED, TransportState.WAITING):
             self.publish_diagnostic(
-                DiagnosticStatus.WARN,
-                "Waiting for the first complete hardware telemetry sample",
-            )
-            return
-        age = (
-            self.get_clock().now() - self.last_complete_telemetry_time
-        ).nanoseconds / 1e9
-        if not math.isfinite(age) or age > 0.5:
-            self.publish_diagnostic(
-                DiagnosticStatus.ERROR,
-                "Complete hardware telemetry is stale",
+                DiagnosticStatus.WARN, feedback.reason, feedback
             )
             return
         self.publish_diagnostic(
-            DiagnosticStatus.OK,
-            "Motor controller, encoders, and onboard sensors healthy",
+            DiagnosticStatus.ERROR, feedback.reason, feedback
         )
 
+    def _observe_feedback_failure(
+        self, feedback: TransportStatus, allow_exit: bool
+    ) -> None:
+        """Stop, diagnose, and eventually exit after a terminal transport fault."""
+        try:
+            observed_now = float(self._monotonic_clock())
+            if not math.isfinite(observed_now):
+                observed_now = None
+        except Exception:
+            observed_now = None
+
+        if self.feedback_failure_observed_at is None:
+            self.feedback_failure_observed_at = observed_now
+            self.feedback_failure_reason = feedback.reason
+            self.get_logger().error(
+                "Terminal motor-controller feedback failure: %s"
+                % feedback.reason
+            )
+            stop_errors = self.best_effort_stop_motion(repeat=3)
+            if stop_errors:
+                self.last_stop_attempt = (
+                    "attempted 3 zero commands; %d raised; delivery is not proven"
+                    % len(stop_errors)
+                )
+                self.get_logger().error(
+                    "Best-effort zero command error(s): %s"
+                    % "; ".join(stop_errors)
+                )
+            else:
+                self.last_stop_attempt = (
+                    "attempted 3 zero commands; delivery is not proven"
+                )
+            self.failure_stop_attempts += 1
+
+        self.publish_diagnostic(
+            DiagnosticStatus.ERROR,
+            "Terminal controller feedback failure: %s" % feedback.reason,
+            feedback,
+        )
+
+        if not allow_exit:
+            return
+        self.feedback_failure_exit_checks += 1
+        started_at = self.feedback_failure_observed_at
+        fallback_checks = math.ceil(
+            self.feedback_failure_exit_delay / 0.1
+        ) + 1
+        if (
+            observed_now is None
+            or started_at is None
+            or observed_now - started_at >= self.feedback_failure_exit_delay
+            or self.feedback_failure_exit_checks >= fallback_checks
+        ):
+            raise RuntimeError(
+                "Required motor-controller feedback failed: %s"
+                % (self.feedback_failure_reason or feedback.reason)
+            )
+
+    def _perform_actuator(
+        self, label: str, action: Callable[[object], object]
+    ) -> bool:
+        """Run one actuator write atomically with fresh-feedback authority."""
+        try:
+            self.transport.perform_while_healthy(label, action)
+            return True
+        except Exception as exc:
+            feedback = self.transport.status()
+            if feedback.state is TransportState.HEALTHY:
+                self.transport.latch_failure(
+                    "%s failed: %s: %s" % (label, type(exc).__name__, exc)
+                )
+                feedback = self.transport.status()
+        self.get_logger().warning(
+            "Rejected %s while controller feedback is %s: %s"
+            % (label, feedback.state.value, feedback.reason)
+        )
+        if feedback.state is TransportState.FAILED:
+            self._observe_feedback_failure(feedback, allow_exit=False)
+        return False
+
     def set_motion(self, vx: float, vy: float, wz: float) -> None:
-        """Send a motion command to the controller."""
+        """Send nonzero motion atomically; always permit a monitored zero."""
+        if (vx, vy, wz) != (0.0, 0.0, 0.0):
+            sent = self._perform_actuator(
+                "motion command",
+                lambda car: car.set_car_motion(vx, vy, wz),
+            )
+            if not sent:
+                raise RosmasterTransportError(
+                    "motion command rejected by controller transport"
+                )
+            return
+
+        failures_before = getattr(
+            self.transport, "serial_write_failure_count", 0
+        )
         self.car.set_car_motion(vx, vy, wz)
+        failures_after = getattr(
+            self.transport, "serial_write_failure_count", failures_before
+        )
+        if failures_after > failures_before:
+            raise RosmasterTransportError(
+                getattr(self.transport, "latest_serial_write_failure", None)
+                or "zero-motion serial write failed"
+            )
 
     def stop_motion(self, repeat: int = 1) -> None:
         """Send redundant zero commands and mark the driver stopped."""
         self.motion_safety.stop(repeat=repeat)
 
+    def best_effort_stop_motion(self, repeat: int = 3) -> list[str]:
+        """Attempt every redundant zero even if an individual write raises."""
+        errors = []
+        attempts = max(1, repeat)
+        transport = getattr(self, "transport", None)
+        for _ in range(attempts):
+            failures_before = getattr(
+                transport, "serial_write_failure_count", 0
+            )
+            try:
+                self.car.set_car_motion(0.0, 0.0, 0.0)
+            except Exception as exc:
+                errors.append("%s: %s" % (type(exc).__name__, exc))
+            failures_after = getattr(
+                transport,
+                "serial_write_failure_count",
+                failures_before,
+            )
+            if failures_after > failures_before:
+                errors.append(
+                    getattr(
+                        transport, "latest_serial_write_failure", None
+                    )
+                    or "zero-motion serial write failed"
+                )
+        self.motion_safety.motion_stopped = not errors
+        return errors
+
+    def _monotonic_now(self, context: str) -> Optional[float]:
+        """Read the safety clock or turn its failure into a terminal fault."""
+        try:
+            now = float(self._monotonic_clock())
+        except Exception as exc:
+            reason = "%s monotonic clock raised %s: %s" % (
+                context,
+                type(exc).__name__,
+                exc,
+            )
+        else:
+            if math.isfinite(now):
+                return now
+            reason = "%s monotonic clock returned non-finite time %r" % (
+                context,
+                now,
+            )
+        self.transport.latch_failure(reason)
+        self._observe_feedback_failure(
+            self.transport.status(), allow_exit=False
+        )
+        return None
+
     def cmd_vel_callback(self, message: Twist) -> None:
         """Clamp and forward a ROS velocity command to the controller."""
-        self.motion_safety.command(
-            message.linear.x,
-            message.linear.y,
-            message.angular.z,
-            self.get_clock().now().nanoseconds / 1e9,
-        )
+        now_seconds = self._monotonic_now("cmd_vel")
+        if now_seconds is None:
+            return
+        try:
+            self.motion_safety.command(
+                message.linear.x,
+                message.linear.y,
+                message.angular.z,
+                now_seconds,
+            )
+        except RosmasterTransportError:
+            return
 
     def check_cmd_vel_watchdog(self) -> None:
         """Stop persistent motion when command updates cease."""
-        now_seconds = self.get_clock().now().nanoseconds / 1e9
+        feedback = self.transport.status()
+        if feedback.state is TransportState.FAILED:
+            self._observe_feedback_failure(feedback, allow_exit=False)
+            return
+        now_seconds = self._monotonic_now("cmd_vel watchdog")
+        if now_seconds is None:
+            return
         elapsed = now_seconds - self.motion_safety.last_command_time
-        if self.motion_safety.enforce_timeout(now_seconds):
+        try:
+            expired = self.motion_safety.enforce_timeout(now_seconds)
+        except RosmasterTransportError:
+            feedback = self.transport.status()
+            if feedback.state is TransportState.FAILED:
+                self._observe_feedback_failure(feedback, allow_exit=False)
+            return
+        if expired:
             self.get_logger().warning(
                 "cmd_vel timeout after %.3fs; commanding zero velocity"
                 % elapsed
@@ -224,15 +484,25 @@ class YahboomCarDriver(Node):
     def rgb_light_callback(self, message: Int32) -> None:
         """Set the expansion-board RGB effect."""
         for _ in range(3):
-            self.car.set_colorful_effect(message.data, 6, parm=1)
+            if not self._perform_actuator(
+                "RGB command",
+                lambda car: car.set_colorful_effect(
+                    message.data, 6, parm=1
+                ),
+            ):
+                return
 
     def buzzer_callback(self, message: Bool) -> None:
         """Set the expansion-board buzzer state."""
         for _ in range(3):
-            self.car.set_beep(1 if message.data else 0)
+            if not self._perform_actuator(
+                "buzzer command",
+                lambda car: car.set_beep(1 if message.data else 0),
+            ):
+                return
 
-    def make_joint_state(self, now) -> Optional[JointState]:
-        """Read encoders and return a normalized four-wheel joint state."""
+    def make_joint_state(self, now, raw_encoders) -> JointState:
+        """Build a normalized four-wheel state from one authorized snapshot."""
         state = JointState()
         state.header.stamp = now.to_msg()
         state.header.frame_id = "joint_states"
@@ -244,35 +514,9 @@ class YahboomCarDriver(Node):
         ]
         state.name = [self.prefix + name for name in base_names]
 
-        try:
-            raw_encoders = self.car.get_motor_encoder()
-            current_encoders = map_encoder_counts(
-                raw_encoders, self.encoder_order, self.encoder_signs
-            )
-        except Exception as exc:
-            self.encoder_failure_count += 1
-            self.publish_diagnostic(
-                DiagnosticStatus.ERROR,
-                "Wheel encoder read failed: %s" % exc,
-            )
-            if not self.encoder_fault_active:
-                self.get_logger().error("Encoder read failed: %s" % exc)
-                self.encoder_fault_active = True
-            if self.encoder_failure_count >= self.max_consecutive_read_failures:
-                raise RuntimeError(
-                    "Required motor encoder hardware is unavailable after %d reads"
-                    % self.encoder_failure_count
-                ) from exc
-            return None
-
-        if self.encoder_fault_active:
-            self.get_logger().info("Encoder feedback recovered")
-            self.encoder_fault_active = False
-            self.publish_diagnostic(
-                DiagnosticStatus.OK,
-                "Wheel encoder feedback recovered",
-            )
-        self.encoder_failure_count = 0
+        current_encoders = map_encoder_counts(
+            raw_encoders, self.encoder_order, self.encoder_signs
+        )
 
         velocities = [0.0, 0.0, 0.0, 0.0]
         if (
@@ -304,64 +548,106 @@ class YahboomCarDriver(Node):
         return state
 
     def publish_data(self) -> None:
-        """Publish encoder, IMU, magnetic, battery, and firmware telemetry."""
-        now = self.get_clock().now()
-        joint_state = self.make_joint_state(now)
-        if joint_state is not None:
-            self.joint_state_publisher.publish(joint_state)
+        """Publish one set only when new controller reports remain fresh."""
+        feedback = self.transport.status()
+        if feedback.state in (TransportState.CREATED, TransportState.WAITING):
+            return
+        if feedback.state is not TransportState.HEALTHY:
+            self._observe_feedback_failure(feedback, allow_exit=True)
+            return
 
         try:
-            edition = Float32(data=float(self.car.get_version()))
-            battery = Float32(data=float(self.car.get_battery_voltage()))
-            ax, ay, az = self.car.get_accelerometer_data()
-            gx, gy, gz = self.car.get_gyroscope_data()
-            mx, my, mz = self.car.get_magnetometer_data()
-            vx, vy, angular = self.car.get_motion_data()
-        except Exception as exc:
-            self.telemetry_failure_count += 1
-            self.publish_diagnostic(
-                DiagnosticStatus.ERROR,
-                "Controller/IMU telemetry read failed: %s" % exc,
-            )
-            self.get_logger().error(
-                "Controller telemetry read failed (%d/%d): %s"
-                % (
-                    self.telemetry_failure_count,
-                    self.max_consecutive_read_failures,
-                    exc,
+            # get_version may send one request and wait for its response.  Keep
+            # it outside the cache lock so the receive thread can parse that
+            # response, then atomically copy the auto-report-backed caches.
+            edition_value = float(self.car.get_version())
+            (
+                raw_encoders,
+                battery_value,
+                acceleration,
+                angular_velocity,
+                magnetic_field_values,
+                motion,
+            ) = self.transport.read_cached(
+                lambda car: (
+                    car.get_motor_encoder(),
+                    float(car.get_battery_voltage()),
+                    car.get_accelerometer_data(),
+                    car.get_gyroscope_data(),
+                    car.get_magnetometer_data(),
+                    car.get_motion_data(),
                 )
             )
-            if self.telemetry_failure_count >= self.max_consecutive_read_failures:
-                raise RuntimeError(
-                    "Required motor/IMU hardware is unavailable after %d reads"
-                    % self.telemetry_failure_count
-                ) from exc
-            return
-        self.telemetry_failure_count = 0
-
-        telemetry = (
-            edition.data,
-            battery.data,
-            ax,
-            ay,
-            az,
-            gx,
-            gy,
-            gz,
-            mx,
-            my,
-            mz,
-            vx,
-            vy,
-            angular,
-        )
-        if not all(math.isfinite(float(value)) for value in telemetry):
-            self.publish_diagnostic(
-                DiagnosticStatus.ERROR,
-                "Controller/IMU telemetry contains non-finite data",
+        except Exception as exc:
+            self.transport.latch_failure(
+                "controller cache read failed: %s: %s"
+                % (type(exc).__name__, exc)
             )
-            raise RuntimeError("Required motor/IMU telemetry contains non-finite data")
-        self.last_complete_telemetry_time = now
+            self._observe_feedback_failure(
+                self.transport.status(), allow_exit=True
+            )
+            return
+
+        try:
+            if len(raw_encoders) != 4:
+                raise ValueError(
+                    "raw encoder data must contain exactly four counters"
+                )
+            ax, ay, az = acceleration
+            gx, gy, gz = angular_velocity
+            mx, my, mz = magnetic_field_values
+            vx, vy, angular = motion
+            telemetry = (
+                edition_value,
+                battery_value,
+                *raw_encoders,
+                ax,
+                ay,
+                az,
+                gx,
+                gy,
+                gz,
+                mx,
+                my,
+                mz,
+                vx,
+                vy,
+                angular,
+            )
+            if not all(math.isfinite(float(value)) for value in telemetry):
+                raise ValueError("non-finite telemetry")
+        except Exception as exc:
+            self.transport.latch_failure(
+                "controller cache validation failed: %s: %s"
+                % (type(exc).__name__, exc)
+            )
+            self._observe_feedback_failure(
+                self.transport.status(), allow_exit=True
+            )
+            return
+
+        # A receive exception may have arrived while values were copied.  Do
+        # not stamp or publish that cache if the monitored path has failed.
+        feedback = self.transport.status()
+        if feedback.state is not TransportState.HEALTHY:
+            self._observe_feedback_failure(feedback, allow_exit=True)
+            return
+
+        now = self.get_clock().now()
+        try:
+            joint_state = self.make_joint_state(now, raw_encoders)
+        except Exception as exc:
+            self.transport.latch_failure(
+                "wheel encoder conversion failed: %s: %s"
+                % (type(exc).__name__, exc)
+            )
+            self._observe_feedback_failure(
+                self.transport.status(), allow_exit=True
+            )
+            return
+
+        edition = Float32(data=edition_value)
+        battery = Float32(data=battery_value)
 
         imu = Imu()
         imu.header.stamp = now.to_msg()
@@ -385,11 +671,49 @@ class YahboomCarDriver(Node):
         velocity.linear.y = float(vy)
         velocity.angular.z = float(angular)
 
-        self.velocity_publisher.publish(velocity)
-        self.imu_publisher.publish(imu)
-        self.magnetic_field_publisher.publish(magnetic_field)
-        self.voltage_publisher.publish(battery)
-        self.edition_publisher.publish(edition)
+        def publish_batch(_car) -> None:
+            self.joint_state_publisher.publish(joint_state)
+            self.velocity_publisher.publish(velocity)
+            self.imu_publisher.publish(imu)
+            self.magnetic_field_publisher.publish(magnetic_field)
+            self.voltage_publisher.publish(battery)
+            self.edition_publisher.publish(edition)
+
+        try:
+            self.transport.perform_while_healthy(
+                "controller data publication", publish_batch
+            )
+        except Exception:
+            feedback = self.transport.status()
+            if feedback.state is TransportState.FAILED:
+                self._observe_feedback_failure(feedback, allow_exit=True)
+
+
+def cleanup_driver(driver: YahboomCarDriver) -> None:
+    """Best-effort shutdown that never masks the primary driver failure."""
+    try:
+        best_effort_stop = getattr(driver, "best_effort_stop_motion", None)
+        if callable(best_effort_stop):
+            stop_errors = best_effort_stop(repeat=3)
+            if stop_errors:
+                driver.get_logger().error(
+                    "Final zero-command error(s): %s"
+                    % "; ".join(stop_errors)
+                )
+        else:
+            driver.stop_motion(repeat=3)
+    except Exception as exc:
+        driver.get_logger().error(
+            "Final best-effort zero command raised: %s" % exc
+        )
+    try:
+        driver.transport.close()
+    except Exception as exc:
+        driver.get_logger().error("Controller transport close raised: %s" % exc)
+    try:
+        driver.destroy_node()
+    except Exception as exc:
+        driver.get_logger().error("ROS node destruction raised: %s" % exc)
 
 
 def main() -> None:
@@ -403,7 +727,9 @@ def main() -> None:
         pass
     finally:
         if driver is not None:
-            driver.stop_motion(repeat=3)
-            driver.destroy_node()
+            cleanup_driver(driver)
         if rclpy.ok():
-            rclpy.shutdown()
+            try:
+                rclpy.shutdown()
+            except Exception:
+                pass
