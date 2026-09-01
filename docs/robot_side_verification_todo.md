@@ -8,8 +8,15 @@ This checklist targets one exact reviewed, published branch head. That head must
 contain both runtime commit `a08b097b22781ca500fd61c01164a4e7167b3873`
 and workstation-validation commit
 `bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80`. Record and substitute the final
-full deployment SHA at test time. Robot-side validation is pending, and
-autostart remains blocked.
+full deployment SHA at test time.
+
+Robot-side validation on `x3-c` ran on 2026-09-02 at
+`e34f8a35a75fb824add197d18fa330d3934eb89b`: sections 1-6 passed (with the
+documented, owner-accepted exception for bounded active-link-loss stop — see
+[the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md)),
+and autostart was designed, installed, and reboot-validated on that same
+robot. Section 7 (simulator/physical consumer parity) remains open; no
+external consumer project has been selected yet.
 
 ## Test record
 
@@ -422,8 +429,10 @@ source, and external distance/heading measurements.
 
 Robot validation of runtime commit
 `a08b097b22781ca500fd61c01164a4e7167b3873` and workstation-validation commit
-`bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80` is pending. Autostart remains
-blocked until this checklist passes on one X3. The next task after acceptance
-is to design a versioned, failure-propagating autostart routine that invokes the
-single strict bringup and never starts operator tools or project behavior by
-default.
+`bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80` passed on `x3-c` on 2026-09-02
+(sections 1-6, with the documented active-link-loss exception). Autostart has
+been designed, installed, enabled, and reboot-validated on that robot as a
+versioned, failure-propagating systemd routine that invokes the single strict
+bringup and never starts operator tools or project behavior by default —
+see [docs/autostart_setup.md](autostart_setup.md). Section 7 (simulator/physical
+consumer parity) remains open and is not required for autostart.
