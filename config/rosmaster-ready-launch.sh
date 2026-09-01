@@ -15,6 +15,8 @@ docker exec "$CONTAINER_NAME" /bin/bash -lc \
   "source /opt/ros/humble/setup.bash && source '$WORKSPACE/install/setup.bash' && python3 '$WORKSPACE/src/physical_rosmaster/tools/physical_contract_probe.py'"
 
 docker exec \
+  -e READY_RGB_TRANSIENT_EFFECT \
+  -e READY_RGB_TRANSIENT_SECONDS \
   -e READY_RGB_EFFECT \
   "$CONTAINER_NAME" /bin/bash -lc \
-  "source /opt/ros/humble/setup.bash && source '$WORKSPACE/install/setup.bash' && bash '$WORKSPACE/src/physical_rosmaster/config/rosmaster-ready-signal.sh'"
+  "source /opt/ros/humble/setup.bash && source '$WORKSPACE/install/setup.bash' && bash /usr/local/sbin/rosmaster-ready-signal"

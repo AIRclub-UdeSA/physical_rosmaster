@@ -6,10 +6,12 @@
 # reached after tools/physical_contract_probe.py has already exited 0 for
 # this boot (rosmaster-ready-launch enforces that order) — never publish
 # this signal for an unverified graph. Runs inside the container with ROS
-# already sourced, invoked at its versioned checkout path rather than
-# copied elsewhere, the same way physical_contract_probe.py is. docker exec
-# on the host inherits this script's stdout into the calling systemd
-# unit's journal, so plain echo is enough here.
+# already sourced. Deployed with `docker cp` to /usr/local/sbin inside the
+# container, the same way the host-side scripts are copied to
+# /usr/local/sbin on the host — not read from the tracked workspace
+# checkout, so it does not require a git push/pull cycle to update.
+# docker exec on the host inherits this script's stdout into the calling
+# systemd unit's journal, so plain echo is enough here.
 set -euo pipefail
 
 READY_RGB_TRANSIENT_EFFECT="${READY_RGB_TRANSIENT_EFFECT:-2}"
