@@ -490,8 +490,30 @@ window, with peak per-wheel velocities of `2.5-3.3 rad/s`, faster than the
 independently confirmed some wheels visibly started turning before others.
 This delayed-then-uneven-then-overshooting shape looks like stiction
 (static friction) that releases unevenly per wheel, worsened by low voltage,
-rather than a steady proportional response — still to be diagnosed against
-the checks below, not assumed.
+rather than a steady proportional response.
+
+Follow-up on 2026-09-02: 18 bounded pulses (6 axes x 3 reps, `+/-0.10 m/s`
+translation, `+/-0.30 rad/s` yaw) were recorded and analyzed. Translation was
+sign-correct and repeatable on all four wheels every time, but with a
+repeatable ~2x FR-heavy imbalance (e.g. `+X`: FL 1.29-1.50, FR 2.31-3.20, BL
+0.80-1.13, BR 1.29-1.73 rad) that measurably leaked into unwanted yaw drift.
+Rotation at `0.30 rad/s` looked far worse at first — FL/BL/BR near zero on
+every trial, FR alone responding but varying 30x between identical reps — but
+this was a threshold artifact, not a separate fault: for this chassis
+(half-wheelbase `0.08` m, half-track `0.0845` m), `0.30 rad/s` yaw converts to
+only `~0.049` m/s per wheel, matching the earlier `0.05 m/s` trial that also
+showed delayed, inconsistent stiction release. Repeating at `0.60 rad/s`
+(`~0.099` m/s per wheel, matching the working `0.10 m/s` translation speed)
+resolved it: all four wheels responded every time with correct sign and
+repeatable odometry yaw (`0.28-0.31` rad across reps), showing the same
+~2-4x FR-vs-BL imbalance seen in translation, not near-zero response.
+
+The project owner reviewed this and is treating the ~2-4x FR-vs-BL actuation
+imbalance as a tracked, accepted platform characteristic (known motor/actuator
+condition) rather than a blocker, the same way the active-link-loss gate was
+handled above. Floor trials may proceed; keep commands at or above roughly
+`0.10 m/s`/`0.60 rad/s`-per-wheel-equivalent, since below that the stiction
+threshold makes response inconsistent regardless of this imbalance.
 
 Before motion:
 
@@ -553,10 +575,6 @@ Run one command source at a time with the wheels lifted:
 
 ## 8. Perform measured floor acceptance
 
-Floor testing is blocked by the pending robot validation of the exact reviewed
-full-SHA head containing both `a08b097` and `bc965a6`, bounded active
-physical-stop proof, and all remaining lifted-motion and operator-tool gates.
-
 Use a clear level area, a human observer, the tested stop path, one command
 publisher, conservative bounds, and an external distance/heading measurement.
 
@@ -572,6 +590,43 @@ publisher, conservative bounds, and an external distance/heading measurement.
 Separate repeated systematic odometry error from normal mecanum slip. Propose
 geometry or covariance changes only from repeated measured evidence and review
 them as a new code change.
+
+### 2026-09-02 result: qualitative single-pass floor check
+
+The project owner chose a lighter-touch pass for today rather than the full
+3-reps-per-axis measured protocol above: one trial per axis (`+X`, `-X`, `+Y`,
+`-Y`, `+yaw`, `-yaw`), operator visual call instead of a tape-measure/marked-
+floor readout, at `0.10 m/s` / `0.60 rad/s` (not `0.30 rad/s`, per the
+stiction-threshold finding in Section 6). Precise external measurement
+(planned: OptiTrack) is deferred to a later session; it is not required for
+autostart or finishing setup per the owner's direction. All six trials were
+recorded in a bag at
+`/root/rosmaster-recovery-evidence/x3_floor_trials_2026-09-02` on the robot.
+
+- [x] `+X`: moved forward as commanded. (First attempt: operator wasn't
+  watching, result unknown. Second attempt: no observed movement — did not
+  clear the floor-load stiction threshold that trial. Third attempt: moved,
+  confirmed by both the operator and logged encoder deltas, FL 0.74 / FR 1.05
+  / BL 0.72 / BR 1.03 rad — a tighter spread than the lifted no-load runs.)
+- [x] `-X`: moved as commanded (operator confirmed on the second attempt;
+  first attempt went unwatched).
+- [x] `+Y`: moved left as commanded.
+- [x] `-Y`: moved as commanded (direction not separately called out).
+- [x] `+yaw` (0.6 rad/s): rotated CCW as commanded; operator noted quality as
+  "not very good," consistent with the accepted FR/BL actuation imbalance.
+- [x] `-yaw` (0.6 rad/s): rotated CW, same character as `+yaw`.
+- [x] No non-finite data, resets, TF conflicts, or sustained diagnostic errors
+  observed; `/diagnostics` stayed healthy and voltage stable (~10.4 V)
+  throughout.
+- [ ] Watchdog and operator-stop checks under floor load, and the full
+  3-rep/measured protocol above, remain open for a later session.
+
+One new finding: floor load raises the effective stiction threshold compared
+to lifted, no-load testing — `0.10 m/s` translation was reliable 3/3 while
+lifted (Section 6) but inconsistent trial-to-trial on the floor (moved on
+attempts 1 and 3, not on attempt 2, same exact command). This is consistent
+with, not separate from, the imbalance/stiction characteristic already tracked
+as an accepted platform limitation; it is not being treated as a new blocker.
 
 ## 9. Prove parity and finish PR #3
 

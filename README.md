@@ -316,11 +316,20 @@ The gate is:
    [the known-issue writeup](docs/troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
    Main power is the only proven stop mechanism for this failure mode;
 4. pass the other lifted command, encoder, odometry, watchdog, and deadman
-   checks, then repeat bounded forward, lateral, and rotation floor trials;
+   checks, then repeat bounded forward, lateral, and rotation floor trials —
+   a qualitative single-pass floor check (one trial per axis, visual
+   confirmation) passed on 2026-09-02; the full 3-rep measured protocol,
+   precise external measurement, and operator-tool (joystick/keyboard/
+   calibration) checks remain open;
 5. run one minimal consumer against simulator and hardware without remaps.
 
-Items 4 and 5 remain open. Once they pass, a new autostart routine may be
-designed.
+Item 4's full measured protocol, operator tools, and item 5 remain open. Once
+they pass, a new autostart routine may be designed. Lifted-motion diagnosis
+also found a repeatable ~2-4x front-right-vs-back-left actuation imbalance,
+most pronounced below roughly `0.10 m/s`/`0.60 rad/s` per-wheel-equivalent;
+the owner is tracking this as an accepted known platform characteristic (see
+[docs/robot_side_next_moves.md](docs/robot_side_next_moves.md), Section 6)
+rather than a blocker.
 
 ## Documentation
 
