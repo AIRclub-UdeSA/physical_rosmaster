@@ -1,18 +1,40 @@
 # ROS 2 Humble X3 setup and autostart gate
 
-Despite the historical filename, this document does not install or enable autostart. The old routine targeted the former EKF/application tree and unstable `/dev/ttyUSB*`/`/dev/video*` names. It must not be reused.
+Despite the historical filename, this document does not install or enable
+autostart. The old routine targeted the former EKF/application tree and
+unstable `/dev/ttyUSB*`/`/dev/video*` names. It must not be reused.
 
-This guide prepares one robot for manual validation. Autostart remains blocked until the final gate passes.
+This guide prepares one robot for manual validation. Autostart remains blocked
+until the final gate passes.
 
 ## 1. Preconditions
 
 - Yahboom ROS 2 Humble container is operational.
 - The robot is an ROSMASTER X3; X1 and R2 are unsupported.
-- The host exposes motor controller, A1 LiDAR, and Astra USB devices to the container.
-- Existing source and generated-state backups are outside `/root/yahboomcar_ws`.
+- The host exposes motor controller, A1 LiDAR, and Astra USB devices to the
+  container.
+- Existing source and generated-state backups are outside
+  `/root/yahboomcar_ws`.
 - Host autostart is disabled while validation is in progress.
 
-If an old service is active, stop it using the robot's existing administration procedure before opening serial devices manually.
+If an old service is active, stop it using the robot's existing administration
+procedure before opening serial devices manually.
+
+Inspect storage before cloning, building, or changing Docker state:
+
+```bash
+df -h /
+docker system df
+docker ps -a --size
+```
+
+Do not use aggressive pruning as the first response to low disk space. An
+active container or image can consume most of the disk while Docker reports no
+reclaimable space, and `docker system prune -a` does not shrink an active
+container's writable layer. Diagnose the actual consumer first; see
+[Root filesystem full causing LightDM login loop and Docker growth](troubleshooting/known_issues/root-filesystem-full-login-loop.md).
+Preserve bags, calibration, and acceptance evidence, and never delete
+`/var/lib/docker` manually.
 
 ## 2. Source and dependencies
 
@@ -30,7 +52,8 @@ rosdep update
 rosdep install --from-paths src --ignore-src -r -y
 ```
 
-The manifest pins `ros2_astra_camera`. Do not build an arbitrary current camera-driver branch.
+The manifest pins `ros2_astra_camera`. Do not build an arbitrary current
+camera-driver branch.
 
 Verify the robot-provided motor library:
 
@@ -38,7 +61,9 @@ Verify the robot-provided motor library:
 python3 -c "from Rosmaster_Lib import Rosmaster; print(Rosmaster)"
 ```
 
-If that import fails, restore the Yahboom host/container library integration before building. Do not vendor an unknown `Rosmaster_Lib` copy into this repository.
+If that import fails, restore the Yahboom host/container library integration
+before building. Do not vendor an unknown `Rosmaster_Lib` copy into this
+repository.
 
 ## 3. Build from clean generated state
 
@@ -49,7 +74,8 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-The physical repository must show eight local packages. The external camera repository adds `astra_camera` and `astra_camera_msgs` to the workspace.
+The physical repository must show eight local packages. The external camera
+repository adds `astra_camera` and `astra_camera_msgs` to the workspace.
 
 ## 4. Identify required hardware
 
@@ -68,9 +94,13 @@ Record exact model, vendor/product IDs, and stable identity for:
 - Slamtec A1 serial adapter;
 - Astra-family RGB-D camera.
 
-If no Orbbec/Astra device appears, strict simulator parity fails. Stop here; do not prepare autostart.
+If no Orbbec/Astra device appears, strict simulator parity fails. Stop here; do
+not prepare autostart.
 
-Use [../config/99-rosmaster-x3.rules.example](../config/99-rosmaster-x3.rules.example) as a template. Replace placeholders with observed values, install it on the host, reload udev rules, reconnect the devices, and verify the final aliases. A literal placeholder rule is intentionally nonfunctional.
+Use [../config/99-rosmaster-x3.rules.example](../config/99-rosmaster-x3.rules.example)
+as a template. Replace placeholders with observed values, install it on the
+host, reload udev rules, reconnect the devices, and verify the final aliases. A
+literal placeholder rule is intentionally nonfunctional.
 
 Prefer a unique device serial. Some CH340 motor controllers expose no serial;
 for those units, bind `/dev/robot/motor` to a dedicated physical USB port using
@@ -86,11 +116,13 @@ export ROSMASTER_LIDAR_PORT=/dev/robot/lidar
 export ROSMASTER_ASTRA_SERIAL=<astra-serial>
 ```
 
-The camera serial may be temporarily omitted only during discovery with exactly one device attached. It must be recorded and selected before acceptance.
+The camera serial may be temporarily omitted only during discovery with exactly
+one device attached. It must be recorded and selected before acceptance.
 
 ## 6. Manual non-motion gate
 
-Lift the drive wheels or otherwise prevent unintended movement. Start only default bringup:
+Lift the drive wheels or otherwise prevent unintended movement. Start only
+default bringup:
 
 ```bash
 cd /root/yahboomcar_ws
@@ -118,13 +150,16 @@ Acceptance requires:
 - canonical wheel joints;
 - observed `odom -> base_footprint` authority from wheel odometry;
 - healthy controller/encoder status on `/diagnostics`;
-- `odom` → every sensor frame resolvable at message time.
+- `odom` to every sensor frame resolvable at message time.
 
-Required driver exit or camera startup failure must stop bringup. Fix hardware/dependencies rather than making sensors optional.
+Required driver exit or camera startup failure must stop bringup. Fix
+hardware/dependencies rather than making sensors optional.
 
 ## 7. Lifted and floor motion gates
 
-Follow [odometry_validation.md](odometry_validation.md). Use only the bounded pulse, joystick, or keyboard tool under direct supervision, one publisher at a time.
+Follow [odometry_validation.md](odometry_validation.md). Use only the bounded
+pulse, joystick, or keyboard tool under direct supervision, one publisher at a
+time.
 
 Verify:
 
@@ -135,7 +170,8 @@ Verify:
 - keyboard timeout;
 - calibration remains inert unless explicitly activated.
 
-Then repeat conservative floor trials with external observations. Do not tune geometry or covariance from visual impression alone.
+Then repeat conservative floor trials with external observations. Do not tune
+geometry or covariance from visual impression alone.
 
 ## 8. Simulator/physical acceptance
 
@@ -144,7 +180,8 @@ Run the same minimal consumer or contract-facing project against:
 1. simulator commit `772ba25`;
 2. this physical platform.
 
-No topic remaps or frame-name substitutions are allowed. Simulation-only clock and ground truth are excluded.
+No topic remaps or frame-name substitutions are allowed. Simulation-only clock
+and ground truth are excluded.
 
 ## 9. Autostart decision
 
@@ -156,6 +193,19 @@ Autostart work may begin only when one X3 has passed:
 - simulator/physical consumer acceptance;
 - stable motor, LiDAR, and camera identity configuration.
 
-The future routine should be versioned in this repository, invoke the single strict platform launch, load per-robot identity configuration, propagate failures to the host service, and never start joystick, keyboard, calibration, or project behavior by default.
+The future routine should be versioned in this repository, invoke the single
+strict platform launch, load per-robot identity configuration, propagate
+failures to the host service, and never start joystick, keyboard, calibration,
+or project behavior by default. It should also:
+
+- refuse startup when the root filesystem is at least 95% used or has less than
+  2 GiB free;
+- cap persistent journald storage and Docker container logs;
+- keep cleanup in a separate maintenance timer rather than ROS bringup;
+- preserve bags, calibration, and acceptance evidence; and
+- keep bringup in the foreground so failures propagate to the service manager.
+
+Test a future disk guard by temporarily raising its threshold, never by filling
+the robot's storage.
 
 Until then, leave the fleet autostart disabled for this new stack.

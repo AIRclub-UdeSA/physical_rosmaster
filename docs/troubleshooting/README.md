@@ -29,5 +29,6 @@ Each reusable issue page should cover:
 - [2026-08-29/30 x3-c host systemd SIGILL incident](incidents/2026-08-29-x3-c-host-systemd-sigill.md)
 - [Docker runc illegal instruction](known_issues/docker-runc-illegal-instruction.md)
 - [Host storage integrity and safe shutdown](known_issues/host-storage-integrity-and-safe-shutdown.md)
+- [Root filesystem full causing LightDM login loop and Docker growth](known_issues/root-filesystem-full-login-loop.md)
 - [Stale colcon install state after a failed package build](known_issues/stale-colcon-install-state.md)
 - [Hostname resolution warning on the Raspberry Pi host](known_issues/hostname-resolution.md)
