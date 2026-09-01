@@ -1,0 +1,27 @@
+# ROSMASTER X3 strict platform autostart: driver, wheel odometry, IMU
+# filter, LiDAR, camera — nothing else. Never starts joystick, keyboard,
+# calibration, or project code.
+#
+# Install as /etc/systemd/system/rosmaster-platform.service, then:
+#   systemctl daemon-reload
+#   systemctl enable --now rosmaster-platform.service
+# See docs/autostart_setup.md for the full install and validation sequence.
+
+[Unit]
+Description=ROSMASTER X3 strict platform launch (driver, sensors, odometry)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/rosmaster/platform.env
+ExecStartPre=/usr/local/sbin/rosmaster-disk-guard
+ExecStartPre=/usr/local/sbin/rosmaster-wait-for-platform
+ExecStart=/usr/local/sbin/rosmaster-platform-launch
+ExecStop=/usr/local/sbin/rosmaster-platform-stop
+Restart=no
+TimeoutStartSec=90
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

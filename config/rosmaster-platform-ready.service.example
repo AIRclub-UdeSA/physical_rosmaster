@@ -1,0 +1,25 @@
+# One-shot boot-ready signal: verifies the strict platform contract, then
+# announces it (buzzer + RGBLight). Sends nothing if the contract does not
+# pass within its own timeout — silence means "not actually ready", not
+# "still starting".
+#
+# Install as /etc/systemd/system/rosmaster-platform-ready.service, then:
+#   systemctl daemon-reload
+#   systemctl enable rosmaster-platform-ready.service
+# (enable, not enable --now: this runs once per boot of the platform
+# service, not by hand — see docs/autostart_setup.md.)
+
+[Unit]
+Description=ROSMASTER X3 boot-ready contract check and buzzer/RGB signal
+After=rosmaster-platform.service
+BindsTo=rosmaster-platform.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/rosmaster/platform.env
+ExecStart=/usr/local/sbin/rosmaster-ready-launch
+Restart=no
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

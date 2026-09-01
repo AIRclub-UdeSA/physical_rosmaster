@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Announces that the strict platform launch is up and contract-verified: a
+# short buzzer pattern, then one steady RGBLight state. Only reached after
+# tools/physical_contract_probe.py has already exited 0 for this boot
+# (rosmaster-ready-launch enforces that order) — never publish this signal
+# for an unverified graph. Runs inside the container with ROS already
+# sourced, invoked at its versioned checkout path rather than copied
+# elsewhere, the same way physical_contract_probe.py is. docker exec on the
+# host inherits this script's stdout into the calling systemd unit's
+# journal, so plain echo is enough here.
+set -euo pipefail
+
+READY_RGB_EFFECT="${READY_RGB_EFFECT:-6}"
+
+beep() {
+  local on_seconds="$1" pause_seconds="$2"
+  ros2 topic pub -1 /Buzzer std_msgs/msg/Bool "data: true" >/dev/null
+  sleep "$on_seconds"
+  ros2 topic pub -1 /Buzzer std_msgs/msg/Bool "data: false" >/dev/null
+  sleep "$pause_seconds"
+}
+
+beep 0.1 0.08
+beep 0.1 0.08
+beep 0.4 0.08
+
+ros2 topic pub -1 /RGBLight std_msgs/msg/Int32 "data: ${READY_RGB_EFFECT}" >/dev/null
+
+echo "Sent boot-ready buzzer + RGBLight (effect=${READY_RGB_EFFECT})"
