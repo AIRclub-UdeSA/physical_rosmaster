@@ -5,10 +5,13 @@ base_node:
     wheelbase_y: 0.170
     odom_frame: odom
     base_footprint_frame: base_footprint
-    use_joint_states: true
     joint_state_timeout: 0.5
-    velocity_timeout: 0.5
     max_wheel_delta_rad: 20.0
+    wheel_joint_names:
+      - front_left_wheel_joint
+      - front_right_wheel_joint
+      - back_left_wheel_joint
+      - back_right_wheel_joint
     linear_scale_x: 1.0
     linear_scale_y: 1.0
     angular_scale: 1.0

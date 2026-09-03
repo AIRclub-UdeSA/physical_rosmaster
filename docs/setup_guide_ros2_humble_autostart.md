@@ -1,313 +1,228 @@
-# ROS 2 Humble And Autostart Setup Guide
+# ROS 2 Humble X3 setup and autostart gate
 
-Date: 2026-08-11
+Despite the historical filename, this document does not install or enable
+autostart. The old routine targeted the former EKF/application tree and
+unstable `/dev/ttyUSB*`/`/dev/video*` names. It must not be reused.
 
-This is the repository copy of the original ROSMASTER X3 setup/autostart guide. It has been sanitized for a public repo and updated to use the public `AIRclub-UdeSA/physical_rosmaster` Git workflow instead of a manually transferred `src.zip`.
+This guide prepares one robot for manual validation. Autostart remains blocked
+until the final gate passes.
 
-Use placeholders such as `<ROBOT_IP>`, `<ROBOT_HOSTNAME>`, `<ROS_DOMAIN_ID>`, `<CAMERA_DEVICE>`, and `<LIDAR_SERIAL_PORT>` for robot-specific values.
+## 1. Preconditions
 
-## Scope
+- Yahboom ROS 2 Humble container is operational.
+- The robot is an ROSMASTER X3; X1 and R2 are unsupported.
+- The host exposes motor controller, A1 LiDAR, and Astra USB devices to the
+  container.
+- Existing source and generated-state backups are outside
+  `/root/yahboomcar_ws`.
+- Host autostart is disabled while validation is in progress.
+- The `vcs` command is available in the container (`python3-vcstool` on
+  Ubuntu).
 
-The current deployment model is:
+If an old service is active, stop it using the robot's existing administration
+procedure before opening serial devices manually.
 
-- robot host runs Docker
-- ROS 2 Humble runs inside Docker container `rosmaster_humble`
-- container image: `yahboomtechnology/ros-humble:4.1.2`
-- ROS workspace inside container: `/root/yahboomcar_ws`
-- physical source repo cloned at `/root/yahboomcar_ws/src/physical_rosmaster`
-- `Rosmaster_Lib` is copied from the robot host into the container and exposed to Python
-- autostart is currently host systemd -> Docker exec -> `/root/auto_start.sh`
-
-## Host Network And Identity
-
-Set the robot hostname:
-
-```bash
-hostname
-sudo hostnamectl set-hostname <ROBOT_HOSTNAME>
-sudo nano /etc/hosts
-sudo reboot
-```
-
-Update `/etc/hosts` so the `127.0.1.1` line uses the new hostname:
-
-```text
-127.0.1.1 <ROBOT_HOSTNAME>
-```
-
-Configure the robot WiFi from the desktop network manager or your site-specific network tooling. Do not commit WiFi passwords or private network credentials to this repo.
-
-### Set The Default WiFi Network
-
-Before doing anything over SSH, set the network the robot should join automatically on boot. This is done from the robot's own desktop, using the NetworkManager applet.
-
-1. Click the Network icon and open **Edit Connections**.
-2. Find the robot's default/factory WiFi network (e.g. an access point the robot itself broadcasts or ships pre-configured with) and select it.
-3. Go to the **General** tab and uncheck **"Connect automatically with priority"**. Save the changes.
-4. Click the Network icon again and connect to the target WiFi network (`<TARGET_WIFI_SSID>`).
-5. If the network does not appear in the list, go to **Advanced Options → Connect to Hidden Wi-Fi Network** and create a hidden connection for `<TARGET_WIFI_SSID>`. Once created, it should also show up under the regular Network icon.
-6. Enter the WiFi password when prompted. Do not store this password in this repo.
-7. Go to **Edit Connections → `<TARGET_WIFI_SSID>` → General** and check **"Connect automatically with priority"**.
-8. Reboot the robot. It should now connect automatically to `<TARGET_WIFI_SSID>` on startup.
-
-Only once this is confirmed should you proceed to SSH-based setup below.
-
-SSH into the robot host:
+Inspect storage before cloning, building, or changing Docker state:
 
 ```bash
-ssh pi@<ROBOT_IP>
-```
-
-Use the configured robot password or SSH key. Do not store credentials in this repo.
-
-## Docker Cleanup And Humble Image
-
-Inspect existing Docker state:
-
-```bash
-docker images
-docker ps -a
+df -h /
 docker system df
-df -h
+docker ps -a --size
 ```
 
-Remove old stopped containers or unused images only after confirming they are not needed. The old Foxy images can consume significant disk space.
+Do not use aggressive pruning as the first response to low disk space. An
+active container or image can consume most of the disk while Docker reports no
+reclaimable space, and `docker system prune -a` does not shrink an active
+container's writable layer. Diagnose the actual consumer first; see
+[Root filesystem full causing LightDM login loop and Docker growth](troubleshooting/known_issues/root-filesystem-full-login-loop.md).
+Preserve bags, calibration, and acceptance evidence, and never delete
+`/var/lib/docker` manually.
 
-Do not use aggressive pruning as the first response to low disk space or a
-LightDM login loop. An active image and active container can consume most of the
-disk while reporting no reclaimable space, and `docker system prune -a` does not
-shrink an active container's writable layer. Diagnose the actual consumers
-first; see [Root Filesystem Full Causing LightDM Login Loop And Docker Growth](troubleshooting/known_issues/root-filesystem-full-login-loop.md).
+## 2. Source and dependencies
 
-If inspection confirms that stopped containers, unused images, unused networks,
-and build cache are genuinely disposable, the deep-clean command is:
+Inside the container:
 
 ```bash
-docker system prune -a
-```
+(
+set -eo pipefail
 
-This removes anything not associated with a running container, so double-check
-`docker ps -a`, preserve robot artifacts, and confirm every deletion before
-running it on a shared robot. Never delete `/var/lib/docker` manually.
-
-Pull the Humble image:
-
-```bash
-docker pull yahboomtechnology/ros-humble:4.1.2
-docker images
-```
-
-## Create The Humble Container
-
-Stop/remove an old Humble container only after backing up anything needed from it:
-
-```bash
-docker rm -f rosmaster_humble
-```
-
-Create the container:
-
-```bash
-docker run -it --privileged \
-  --network host \
-  --name rosmaster_humble \
-  -v /dev:/dev \
-  -e ROS_DOMAIN_ID=<ROS_DOMAIN_ID> \
-  yahboomtechnology/ros-humble:4.1.2 bash
-```
-
-Inside the container, make the domain persistent:
-
-```bash
-sed -i 's/ROS_DOMAIN_ID=20/ROS_DOMAIN_ID=<ROS_DOMAIN_ID>/g' ~/.bashrc
-cat ~/.bashrc | grep ROS_DOMAIN_ID
-source ~/.bashrc
-echo "$ROS_DOMAIN_ID"
-```
-
-Source ROS and any installed workspaces:
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/imu_ws/install/setup.bash 2>/dev/null || true
-source ~/gmapping_ws/install/setup.bash 2>/dev/null || true
-source ~/yahboomcar_ws/install/setup.bash 2>/dev/null || true
-```
-
-Exit the container back to the robot host:
-
-```bash
-exit
-```
-
-From the robot host, configure Docker restart:
-
-```bash
-docker update --restart unless-stopped rosmaster_humble
-docker inspect rosmaster_humble | grep RestartPolicy -A 3
-```
-
-## Configure Rosmaster_Lib
-
-On the robot host, locate the installed Yahboom Python library:
-
-```bash
-sudo find / -type d -name "Rosmaster_Lib" 2>/dev/null
-```
-
-Common host path:
-
-```text
-/home/pi/software/py_install/Rosmaster_Lib
-```
-
-Copy it into the container:
-
-```bash
-docker cp /home/pi/software/py_install/Rosmaster_Lib rosmaster_humble:/root/
-```
-
-Enter the container:
-
-```bash
-docker start rosmaster_humble
-docker exec -it rosmaster_humble bash
-```
-
-Expose the library to Python:
-
-```bash
-echo "/root/Rosmaster_Lib" > /usr/lib/python3.10/dist-packages/rosmaster_lib.pth
-pip3 install pyserial
-python3 -c "from Rosmaster_Lib import Rosmaster; print('OK Rosmaster_Lib')"
-```
-
-## Clone This Repository Into The Container
-
-Inside the container, refresh the ROS apt signing key (the ROS Foundation key rotates periodically; an expired key makes apt fall back to a stale package index and produces `404 Not Found` errors on `ros-humble-*` packages during install):
-
-```bash
-apt-get update
-apt-get install -y gnupg2
-apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F42ED6FBAB17C654
-```
-
-Then update and install:
-
-```bash
-apt-get update
-apt-get install -y git curl unzip nano python3-pip python3-serial \
-  ros-humble-robot-localization \
-  ros-humble-joint-state-publisher-gui \
-  ros-humble-xacro \
-  ros-humble-usb-cam
-```
-
-Verify the install succeeded:
-
-```bash
-dpkg -l | grep -E "ros-humble-(robot-localization|joint-state-publisher-gui|xacro|usb-cam)"
-
-source /opt/ros/humble/setup.bash
-ros2 pkg list | grep -E "robot_localization|joint_state_publisher_gui|xacro|usb_cam"
-
-ros2 run xacro xacro --help
-ros2 pkg executables usb_cam
-```
-
-All commands should return results with no "not found" or missing-dependency errors.
-
-Back up any existing source tree before replacing it:
-
-```bash
-cd /root/yahboomcar_ws
-tar czf /root/yahboomcar_ws_src_backup_$(date +%F_%H%M%S).tgz src
-mv src /root/src_backup_before_physical_rosmaster_$(date +%F_%H%M%S)
-mkdir -p src
-```
-
-Clone and build:
-
-```bash
+mkdir -p /root/yahboomcar_ws/src
 cd /root/yahboomcar_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
 
+# Current pre-merge x3-c recovery only: replace the marker with the reviewed
+# full SHA before running these checks.
+cd physical_rosmaster
+git fetch origin
+git checkout platform/simulator-parity
+git pull --ff-only
+test -z "$(git status --porcelain)"
+test "$(git rev-parse HEAD)" = \
+  "$(git rev-parse origin/platform/simulator-parity)"
+git merge-base --is-ancestor \
+  a08b097b22781ca500fd61c01164a4e7167b3873 HEAD
+git merge-base --is-ancestor \
+  bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80 HEAD
+test "$(git rev-parse HEAD)" = "REPLACE_WITH_REVIEWED_FULL_SHA"
+
+cd ..
+vcs import . < physical_rosmaster/physical_rosmaster.repos
+test -z "$(git -C ros2_astra_camera status --porcelain)"
+test "$(git -C ros2_astra_camera rev-parse HEAD)" = \
+  "f7e71d9ce806e788cb48d8580aac2c778fba4214"
+
 cd /root/yahboomcar_ws
-rm -rf build install log
 source /opt/ros/humble/setup.bash
-colcon list --base-paths src/physical_rosmaster
-colcon build --symlink-install
-source install/setup.bash
+rosdep update
+rosdep install --from-paths src --ignore-src -r -y
+)
 ```
 
-Now that the repo is cloned, inspect the exact installed copy of `Rosmaster_Lib`:
+The manifest pins `ros2_astra_camera`. Do not build an arbitrary current
+camera-driver branch.
+
+The default clone is the canonical new-robot path after this architecture is
+merged to `main`. Until then, do not deploy current `main` to `x3-c`; use
+[the ordered recovery runbook](robot_side_next_moves.md) to select one exact,
+published `platform/simulator-parity` head whose reviewed full SHA contains both
+runtime commit `a08b097` and workstation-validation commit `bc965a6` before
+importing dependencies or building.
+
+Verify the robot-provided motor library with the fail-closed preflight:
 
 ```bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
 python3 tools/rosmaster_lib_probe.py --hash-only
 ```
 
-Optional SLAM/PCD artifacts:
+The command must exit `0` and report the supported V3.3.9 digest. If it returns
+nonzero or cannot import the library, stop and restore the Yahboom
+host/container integration before building. Do not vendor an unknown
+`Rosmaster_Lib` copy into this repository or accept a mismatch by visually
+comparing printed output.
+
+The only supported `Rosmaster_Lib.py` SHA256 is
+`e9fd0f6bb015cda7dba58f4db6994402d83865cc125ab33035dbb39e978b1a8c`.
+Runtime commit `a08b097` checks this digest after importing the library and
+refuses to construct the controller transport when it differs. This is a
+compatibility/version gate for the exact implementation whose private receive
+and parse hooks were reviewed. It is not supply-chain attestation: matching
+bytes do not establish who delivered the file, whether its installation path
+is trusted, or whether the surrounding system is uncompromised. Commit
+`bc965a6` makes the standalone preflight return nonzero for an unsupported
+source.
+
+After the vendor constructor returns, `a08b097` applies and verifies a `0.05 s`
+pyserial `write_timeout`, then wraps runtime writes so exceptions and short
+writes become terminal driver failures. The V3.3.9 constructor's UART-servo
+torque-enable write occurs before that wrapper is installed. A completed
+runtime host write also proves only that the serial layer accepted the frame;
+it is not an acknowledgement that the motor controller executed it or that the
+robot physically stopped.
+
+## 3. Build from clean generated state
 
 ```bash
-cd /root/yahboomcar_ws/src/physical_rosmaster
-tools/fetch_large_artifacts.sh
+(
+set -eo pipefail
+
+cd /root/yahboomcar_ws
+
+# Moving these trees outside the workspace is recoverable and prevents stale
+# generated state reuse.
+archive_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+generated_archive="/root/rosmaster-workspace-archives/${archive_stamp}-pre-deploy"
+test ! -e "$generated_archive"
+mkdir -p /root/rosmaster-workspace-archives
+mkdir "$generated_archive"
+for generated_tree in build install log; do
+  if [ -e "$generated_tree" ]; then
+    mv -- "$generated_tree" "$generated_archive/"
+  fi
+done
+test ! -e build
+test ! -e install
+test ! -e log
+
+colcon list --base-paths src
+colcon build --symlink-install
+colcon test --packages-select \
+  laserscan_to_point_pulisher sllidar_ros2 yahboomcar_astra \
+  yahboomcar_base_node yahboomcar_bringup yahboomcar_ctrl \
+  yahboomcar_description yahboomcar_visual
+colcon test-result --verbose
+source install/setup.bash
+)
 ```
 
-Normal X3 driver bringup does not require those large artifacts.
+Keep the archived generated state until the clean build and test evidence has
+been reviewed; remove it later only as a separate, explicit maintenance action.
 
-The `yahboomcar_slam` package now guards the optional `pcl` install path, so a clean clone should not fail just because the large bundle was not restored.
+The workspace inventory must show exactly eight local packages plus
+`astra_camera` and `astra_camera_msgs`. The external camera-driver worktree must
+be clean and remain at the commit pinned in `physical_rosmaster.repos`.
 
-## Manual Hardware Tests
+## 4. Identify required hardware
 
-Use wheels securely lifted for first motion tests, with supervision and physical
-access to motor power. Follow `agents/x3-c_validation_checklist.md` before any
-floor motion; a clear floor area is not a substitute for the lifted gate.
+On the host:
 
-Motor driver only:
+```bash
+lsusb
+ls -l /dev/serial/by-id
+udevadm info --attribute-walk --name=/dev/ttyUSB0
+```
+
+Inside the container:
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /root/yahboomcar_ws/install/setup.bash
-ros2 run yahboomcar_bringup Mcnamu_driver_X3
+ros2 run astra_camera list_devices_node
 ```
 
-In another shell, enter the container:
+Record exact model, vendor/product IDs, and stable identity for:
+
+- motor controller;
+- Slamtec A1 serial adapter;
+- Astra-family RGB-D camera.
+
+For `x3-c`, the accepted camera topology is the powered Yahboom hub,
+downstream port 4. In that topology, one cold boot followed by three consecutive
+warm boots enumerated both Astra USB functions, `2bc5:060f` for depth and
+`2bc5:050f` for UVC/RGB, without touching or reconnecting any cable. Preserve
+that topology for `x3-c`. This is evidence for that robot, hub, power path, and
+cable; it is not a universal instruction that every X3 must use port 4. Record
+and boot-validate the stable topology of each additional robot independently.
+
+If no Orbbec/Astra device appears, strict simulator parity fails. Stop here; do
+not prepare autostart.
+
+Use [../config/99-rosmaster-x3.rules.example](../config/99-rosmaster-x3.rules.example)
+as a template. Replace placeholders with observed values, install it on the
+host, reload udev rules, reconnect the devices, and verify the final aliases. A
+literal placeholder rule is intentionally nonfunctional.
+
+Prefer a unique device serial. Some CH340 motor controllers expose no serial;
+for those units, bind `/dev/robot/motor` to a dedicated physical USB port using
+the documented `KERNELS` fallback and verify that identity after reboot.
+
+## 5. Configure identities
+
+In the container shell used for manual launch:
 
 ```bash
-docker exec -it rosmaster_humble bash
+export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
+export ROSMASTER_LIDAR_PORT=/dev/robot/lidar
+export ROSMASTER_ASTRA_SERIAL="REPLACE_WITH_ASTRA_SERIAL"
 ```
 
-Once inside that second shell, source the workspace and publish a test velocity command:
+The camera serial may be temporarily omitted only during discovery with exactly
+one device attached. It must be recorded and selected before acceptance.
 
-```bash
-source /opt/ros/humble/setup.bash
-source /root/yahboomcar_ws/install/setup.bash
-cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/safe_cmd_vel_pulse.py --x 0.20 --duration 1.5
-```
+## 6. Manual non-motion gate
 
-Camera:
-
-```bash
-ros2 run usb_cam usb_cam_node_exe --ros-args \
-  -p device_id:=0 \
-  -p frame_id:=default_cam \
-  -p image_width:=320 \
-  -p image_height:=240 \
-  -p framerate:=10.0
-```
-
-LiDAR:
-
-```bash
-ros2 launch sllidar_ros2 sllidar_a1_launch.py \
-  serial_port:=<LIDAR_SERIAL_PORT> \
-  frame_id:=laser_link \
-  serial_baudrate:=115200
-```
-
-Full physical bringup:
+Lift the drive wheels or otherwise prevent unintended movement. Start only
+default bringup:
 
 ```bash
 cd /root/yahboomcar_ws
@@ -316,231 +231,158 @@ source install/setup.bash
 ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
 ```
 
-Topic checks:
+Do not start any command publisher. In another shell:
 
 ```bash
-ros2 node list
-ros2 topic list
-ros2 topic echo /vel_raw --once
-ros2 topic echo /odom_raw --once
-ros2 topic echo /imu/data_raw --once
-```
-
-## Odometry Validation
-
-The next odometry step requires robot hardware.
-
-Run:
-
-```bash
-cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
-```
-
-Then follow `docs/odometry_validation.md`.
-
-## Autostart Script Inside The Container
-
-Create `/root/auto_start.sh` inside the container:
-
-```bash
-nano /root/auto_start.sh
-```
-
-Recommended current content:
-
-```bash
-#!/bin/bash
-set -e
-
 source /opt/ros/humble/setup.bash
 source /root/yahboomcar_ws/install/setup.bash
-
-echo "[$(date)] Starting ROSMASTER X3 bringup..." >> /tmp/ros_autostart.log
-
-nohup ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py >> /tmp/bringup.log 2>&1 &
-sleep 5
-
-# Do not launch display_X3.launch.py here. Core bringup already starts
-# robot_state_publisher, and the display launch would add a second robot-state
-# publisher plus a competing joint-state publisher.
-
-echo "[$(date)] Waiting for USB devices..." >> /tmp/ros_autostart.log
-sleep 10
-
-if [ ! -e /dev/video0 ]; then
-  echo "[$(date)] WARNING: /dev/video0 not found" >> /tmp/ros_autostart.log
-fi
-
-if [ ! -e /dev/ttyUSB1 ]; then
-  echo "[$(date)] WARNING: /dev/ttyUSB1 not found" >> /tmp/ros_autostart.log
-fi
-
-echo "[$(date)] Starting usb_cam..." >> /tmp/ros_autostart.log
-nohup ros2 run usb_cam usb_cam_node_exe --ros-args \
-  -p device_id:=0 \
-  -p frame_id:=default_cam \
-  -p image_width:=320 \
-  -p image_height:=240 \
-  -p framerate:=10.0 \
-  -p pixel_format:=mjpeg2rgb >> /tmp/usb_cam.log 2>&1 &
-
-sleep 3
-
-echo "[$(date)] Starting sllidar..." >> /tmp/ros_autostart.log
-nohup ros2 launch sllidar_ros2 sllidar_a1_launch.py \
-  serial_port:=/dev/ttyUSB1 \
-  frame_id:=laser_link \
-  serial_baudrate:=115200 >> /tmp/sllidar.log 2>&1 &
-
-sleep 5
-
-if pgrep -f sllidar_node >/dev/null; then
-  echo "[$(date)] sllidar_node is running" >> /tmp/ros_autostart.log
-  ros2 topic pub -1 /RGBLight std_msgs/msg/Int32 "data: 3" >/dev/null 2>&1 || true
-else
-  echo "[$(date)] ERROR: sllidar_node did not start. Retrying /dev/ttyUSB0..." >> /tmp/ros_autostart.log
-  nohup ros2 launch sllidar_ros2 sllidar_a1_launch.py \
-    serial_port:=/dev/ttyUSB0 \
-    frame_id:=laser_link \
-    serial_baudrate:=115200 >> /tmp/sllidar.log 2>&1 &
-fi
-
-echo "[$(date)] ROS nodes started" >> /tmp/ros_autostart.log
-
-python3 -c "
-import rclpy
-from std_msgs.msg import Bool
-import time
-rclpy.init()
-node = rclpy.create_node('beeper_boot')
-pub = node.create_publisher(Bool, '/Buzzer', 10)
-time.sleep(0.5)
-def beep(d, p=0.08):
-    pub.publish(Bool(data=True))
-    time.sleep(d)
-    pub.publish(Bool(data=False))
-    time.sleep(p)
-beep(0.1); beep(0.1); beep(0.4)
-node.destroy_node()
-rclpy.shutdown()
-" || echo "[$(date)] WARNING: buzzer beep failed" >> /tmp/ros_autostart.log
-
-sleep 5
-ros2 topic pub -1 /RGBLight std_msgs/msg/Int32 "data: 0" >/dev/null 2>&1 || true
-
-tail -f /dev/null
+cd /root/yahboomcar_ws/src/physical_rosmaster
+python3 tools/physical_contract_probe.py
 ```
 
-Make it executable:
+Acceptance requires:
+
+- exactly one publisher for every sensor topic, `/joint_states`, and `/odom`;
+- no `/cmd_vel` publisher;
+- increasing timestamps and finite data;
+- `rgb8` color and calibrated intrinsics;
+- `32FC1` metric depth with plausible samples;
+- XYZRGB cloud in `cam_1_depth_frame`;
+- scan in `laser_link` and IMU in `imu_link`;
+- canonical wheel joints;
+- observed `odom -> base_footprint` authority from wheel odometry;
+- healthy controller/encoder status on `/diagnostics`;
+- `odom` to every sensor frame resolvable at message time.
+
+Required driver exit or camera startup failure must stop bringup. Fix
+hardware/dependencies rather than making sensors optional.
+
+### Required devices absent at startup
+
+On every new X3, test the camera, LiDAR, and motor controller separately. Keep
+the wheels secured and start strict bringup with exactly one required device
+absent. Camera and LiDAR failure must stop strict bringup; with the motor absent,
+the driver must never become healthy, must exit after the startup-feedback
+deadline, and the strict graph must drain. After each test, restore the device,
+restart from a clean launch, and pass the full physical contract before
+continuing.
+
+For the current motor-only `x3-c` remediation, the previously accepted camera
+and LiDAR startup-absence results may be carried forward unless deployment or
+positive-contract evidence regresses. Motor startup absence and its restored
+full contract must be repeated before the live-loss test.
+
+### Observer-only live motor-controller loss
+
+The exact reviewed head containing `a08b097` and `bc965a6` is still pending
+this robot-side validation. Keep the wheels secured and do not start joystick,
+keyboard, calibration, or any other command source. After strict bringup passes
+its full baseline, run from the repository root:
 
 ```bash
-chmod +x /root/auto_start.sh
+export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
+mkdir -p /root/rosmaster-recovery-evidence
+python3 tools/motor_live_loss_probe.py \
+  --device "$ROSMASTER_MOTOR_PORT" \
+  --confirm-wheels-secured \
+  --output /root/rosmaster-recovery-evidence/motor-live-loss.json
 ```
 
-## Host Autostart Script
+Acceptance requires all of the following in the probe result:
 
-On the robot host:
-```bash
-exit
-```
+- a complete, fresh, stationary baseline for every controller-derived topic;
+- no `/cmd_vel` publisher and no `/cmd_vel` message before or after loss;
+- controller-derived topics become quiet after the motor device disappears;
+- motor diagnostics reach `ERROR` with structured failed freshness evidence;
+- `driver_node` exits;
+- the strict ROS graph drains and remains stably drained for the probe's
+  observation window; and
+- after restoring the controller, a clean strict launch passes the full
+  physical contract again.
 
-create `/usr/local/bin/start_rosmaster.sh`:
+This observer-only, no-command test proves ROS data, diagnostic, process-exit,
+and graph-drain behavior. It does **not** prove that a robot already moving will
+physically stop when feedback or the serial link is lost.
 
-```bash
-sudo nano /usr/local/bin/start_rosmaster.sh
-```
+## 7. Lifted and floor motion gates
 
-Content:
+Follow [odometry_validation.md](odometry_validation.md). Use only the bounded
+pulse, joystick, or keyboard tool under direct supervision, one publisher at a
+time.
 
-```bash
-#!/bin/bash
-set -e
+Verify:
 
-sleep 15
+- forward, left-strafe, and CCW encoder signs;
+- `/odom` direction and TF;
+- command watchdog stop;
+- joystick held deadman, release stop, malformed-input protection, and timeout;
+- keyboard timeout;
+- calibration remains inert unless explicitly activated.
 
-pkill -f rosmaster_main.py || true
-sleep 2
+After the observer-only live-loss gate passes, perform a separate active safety
+gate with all four wheels securely lifted, the main power switch immediately
+reachable, an observer present, and only one very-low-speed command source.
+First prove the software command watchdog produces a bounded physical stop when
+the command stream ends while the link remains healthy. Then, under the same
+restrained conditions, test active controller-link loss against a
+predeclared stop-time bound and record command, wheel motion, diagnostics, and
+power intervention. Cut the main switch immediately if behavior is unexpected
+or the bound is exceeded.
 
-if [ -n "$(docker ps -q -f name=rosmaster_humble)" ]; then
-  echo "Container rosmaster_humble is already running"
-else
-  docker start rosmaster_humble
-  sleep 10
-fi
+Host write completion is not controller execution acknowledgement. Tested on
+`x3-c` on 2026-09-02: the lifted active-link-loss test did not demonstrate a
+bounded physical stop (wheels kept turning, actively driven, for at least 28
+seconds until main power was cut). This was root-caused to a protocol-level
+absence of any command-loss watchdog in the motor controller — see
+[the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
+The project owner accepted this as a known platform limitation rather than a
+blocking requirement, so it no longer prevents floor use. Main power remains
+the only proven stop mechanism for a command-link loss during motion. Do not
+treat repeated host zero writes as a substitute.
 
-docker exec -d rosmaster_humble bash -c "source /opt/ros/humble/setup.bash && /root/auto_start.sh"
+Then repeat conservative floor trials with external observations. Do not tune
+geometry or covariance from visual impression alone.
 
-echo "ROS 2 nodes started in rosmaster_humble"
-```
+## 8. Simulator/physical acceptance
 
-Make it executable:
+Run the same minimal consumer or contract-facing project against:
 
-```bash
-sudo chmod +x /usr/local/bin/start_rosmaster.sh
-```
+1. simulator commit `772ba25`;
+2. this physical platform.
 
-## systemd Service
+No topic remaps or frame-name substitutions are allowed. Simulation-only clock
+and ground truth are excluded.
 
-On the robot host, create `/etc/systemd/system/rosmaster-autostart.service`:
+## 9. Autostart decision
 
-```bash
-sudo nano /etc/systemd/system/rosmaster-autostart.service
-```
+Autostart work may begin only when one X3 has passed:
 
-Content:
+- full non-motion probe;
+- camera-, LiDAR-, and motor-absent startup gates with a restored full contract
+  after each (subject only to the documented current `x3-c` exception);
+- observer-only motor live-loss and its restored full contract;
+- lifted motion and safety gates (the active-link-loss physical-stop trial is
+  a documented, owner-accepted exception rather than a required pass — see
+  [the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md));
+- bounded floor gates;
+- simulator/physical consumer acceptance;
+- stable motor, LiDAR, and camera identity configuration.
 
-```ini
-[Unit]
-Description=ROSMASTER Auto Start Service
-After=docker.service
-Requires=docker.service
+The future routine should be versioned in this repository, invoke the single
+strict platform launch, load per-robot identity configuration, propagate
+failures to the host service, and never start joystick, keyboard, calibration,
+or project behavior by default. It should also:
 
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/local/bin/start_rosmaster.sh
-Restart=on-failure
-RestartSec=10s
+- refuse startup when the root filesystem is at least 95% used or has less than
+  2 GiB free;
+- cap persistent journald storage and Docker container logs;
+- keep cleanup in a separate maintenance timer rather than ROS bringup;
+- preserve bags, calibration, and acceptance evidence; and
+- keep bringup in the foreground so failures propagate to the service manager.
 
-[Install]
-WantedBy=multi-user.target
-```
+Test a future disk guard by temporarily raising its threshold, never by filling
+the robot's storage.
 
-Enable and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable rosmaster-autostart.service
-sudo systemctl start rosmaster-autostart.service
-```
-
-Verify after about 30 seconds:
-
-```bash
-docker exec -it rosmaster_humble bash -c "source /opt/ros/humble/setup.bash && source /root/yahboomcar_ws/install/setup.bash && ros2 node list"
-```
-
-Expected core nodes include the driver node, LiDAR node, camera node, and robot description/TF nodes depending on launch state.
-
-## Future Hardening
-
-This guide preserves the currently working deployment style. Later cleanup
-should move autostart scripts, systemd units, udev rules, and device checks into
-versioned files under this repo.
-
-The future host service should also apply the storage lessons from
-[the `x3-c` disk-full incident](troubleshooting/known_issues/root-filesystem-full-login-loop.md):
-
-- run a host-level disk-space guard with `ExecStartPre` and refuse ROS startup
-  at `95%` used or below `2 GiB` free;
-- cap persistent journald storage and rotate Docker container logs;
-- keep cache cleanup in a separate systemd timer, never in ROS bringup;
-- monitor the container writable layer plus VS Code Server state on both the
-  host and container;
-- preserve bags, calibration, `robot_artifacts/`, and other acceptance evidence;
-- keep the accepted bringup in the foreground so required-process failures
-  propagate to systemd instead of being hidden by `nohup`.
-
-Test the disk guard by temporarily raising its threshold. Do not test it by
-actually filling the robot's SD card.
+The exact reviewed head containing `a08b097` and `bc965a6` remains pending these
+robot-side gates. Until they all pass, leave the fleet autostart disabled for
+this new stack.

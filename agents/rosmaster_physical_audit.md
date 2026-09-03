@@ -115,3 +115,6 @@ Practical options:
 4. Determine from the verified deployed `Rosmaster_Lib` whether encoder positions are available and stable enough for odometry. If yes, implement real wheel-state odometry matching simulator semantics. If no, label current odom as firmware/command-velocity odom with higher covariance and do not treat it as encoder odometry.
 5. Replace `/dev/ttyUSB*` and `/dev/video0` in guide/autostart with udev symlinks.
 6. Add minimal build/launch tests for bringup and odometry math before pushing public code.
+# Historical evidence notice
+
+> This audit describes the repository before the X3-only platform cleanup. Package counts, behavior packages, odometry ownership, and recommendations are retained for provenance, not current operation.

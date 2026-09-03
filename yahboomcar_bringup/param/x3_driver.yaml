@@ -14,3 +14,14 @@ driver_node:
     encoder_order: [0, 2, 1, 3]
     encoder_signs: [1.0, 1.0, 1.0, 1.0]
     encoder_max_delta_ticks: 5000
+    # V3.3.9 auto-reports each packet class about every 40 ms. Cached getters
+    # are never accepted as liveness; all three required report classes must
+    # arrive and remain fresh.
+    feedback_startup_timeout: 2.0
+    feedback_timeout: 0.5
+    # A 13-byte motion frame takes about 1 ms at 115200 baud. Bound a wedged
+    # outbound syscall so failure diagnostics and strict shutdown can proceed.
+    serial_write_timeout: 0.05
+    # Leave enough time for an ERROR diagnostic to leave the process before
+    # strict launch shuts down the rest of the graph.
+    feedback_failure_exit_delay: 0.2

@@ -122,3 +122,6 @@ python3 tools/rosmaster_lib_probe.py --samples 100 --period 0.1
 ```
 
 Expected useful signal: encoder values should change when wheels rotate, keep their latest count when stopped, and diverge if one wheel slips or is resisted. If that holds, the physical odometry fix should use encoder deltas, not `vel_raw` integration alone.
+# Historical evidence notice
+
+> This report predates the simulator-parity cleanup. Its library observations remain useful; its `/odom_raw`/EKF architecture does not describe the current stack.

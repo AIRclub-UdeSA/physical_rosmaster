@@ -141,3 +141,6 @@ Decision: keep the physical robot code separate from the simulator repo. The phy
 - Is `Rosmaster_Lib.get_motion_data()` based on encoder feedback or just the requested chassis command?
 - What are the calibrated CPR, wheel radius, scale factors, and covariance values on the floor?
 - Do we want `physical_rosmaster` package names to stay as Yahboom names initially, or migrate gradually to `physical_rosmaster_*` names?
+# Historical task ledger
+
+> This ledger describes the pre-cleanup `aafed44` architecture. Completed hardware observations remain evidence, but topic ownership, package inventory, and autostart tasks below are obsolete. See `agents/README.md` and the current root documentation.

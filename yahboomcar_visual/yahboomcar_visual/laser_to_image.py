@@ -1,60 +1,95 @@
+#!/usr/bin/env python3
+# Copyright 2026 AIRclub UdeSA
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Render a LaserScan as a parameterized top-down inspection image."""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
 import rclpy
 from rclpy.node import Node
-import cv2 as cv
-import numpy as np
-from cv_bridge import CvBridge
-from sensor_msgs.msg import PointCloud2
-from sensor_msgs.msg import LaserScan, Image
-from .laser_geometry import LaserProjection
-from sensor_msgs.msg import PointField
-from sensor_msgs_py import point_cloud2 as pc2 
-
-class pt2brid_eye(Node):
-    def __init__(self,name):
-    	super().__init__(name)
-    	self.bridge = CvBridge()
-    	self.laserProj = LaserProjection()
-    	self.laserSub = self.create_subscription(LaserScan,"/scan",self.laserCallback,100)  # 接收scan节点  Receiving scan Nodes
-    	self.image_pub = self.create_publisher(Image,'/laserImage',1)
-
-    def laserCallback(self, scan_data):
-    	cloud_out = self.laserProj.projectLaser(scan_data)
-    	lidar = pc2.read_points(cloud_out)
-    	points = np.array(list(lidar))
-    	img = self.pointcloud_to_laserImage(points)
-    	self.image_pub.publish(self.bridge.cv2_to_imgmsg(img))
-    	img = cv.resize(img, (640, 480))
-    	cv.imshow("img", img)
-    	cv.waitKey(10)
-
-    def pointcloud_to_laserImage(self, points):  # 鸟瞰图生成  Aerial view generated
-        x_points = points[:, 0]
-        y_points = points[:, 1]
-        z_points = points[:, 2]
-        f_filt = np.logical_and((x_points > -50), (x_points < 50))
-        s_filt = np.logical_and((y_points > -50), (y_points < 50))
-        filter = np.logical_and(f_filt, s_filt)
-        indices = np.argwhere(filter)
-        x_points = x_points[indices]
-        y_points = y_points[indices]
-        z_points = z_points[indices]
-        x_img = (-y_points * 80).astype(np.int32) + 500
-        y_img = (-x_points * 80).astype(np.int32) + 500
-        pixel_values = np.clip(z_points, -2, 2)
-        pixel_values = ((pixel_values + 2) / 4.0) * 500
-        img = np.zeros([1600, 1200], dtype=np.uint8)
-        img[y_img, x_img] = pixel_values
-        return img
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import Image, LaserScan
 
 
-def main():
-    print("opencv: {}".format(cv.__version__))
-    rclpy.init()
-    pt2img = pt2brid_eye('laser_to_image')
-    rclpy.spin(pt2img)
-    
-    
-    
-    
-    
-    
+class LaserToImage(Node):
+    """Convert valid scan returns into a ROS mono8 image without opening a GUI."""
+
+    def __init__(self) -> None:
+        super().__init__("laser_to_image")
+        self.declare_parameter("input_topic", "/scan")
+        self.declare_parameter("output_topic", "/scan/image")
+        self.declare_parameter("image_size", 800)
+        self.declare_parameter("metres_per_pixel", 0.01)
+        self.image_size = int(self.get_parameter("image_size").value)
+        self.metres_per_pixel = float(
+            self.get_parameter("metres_per_pixel").value
+        )
+        if self.image_size < 100 or self.metres_per_pixel <= 0.0:
+            raise ValueError("invalid scan image dimensions or scale")
+        self.publisher = self.create_publisher(
+            Image,
+            str(self.get_parameter("output_topic").value),
+            qos_profile_sensor_data,
+        )
+        self.subscription = self.create_subscription(
+            LaserScan,
+            str(self.get_parameter("input_topic").value),
+            self.scan_callback,
+            qos_profile_sensor_data,
+        )
+
+    def scan_callback(self, message: LaserScan) -> None:
+        """Preserve the scan header and plot finite returns in the scan frame."""
+        canvas = np.zeros((self.image_size, self.image_size), dtype=np.uint8)
+        center = self.image_size // 2
+        canvas[max(0, center - 2) : center + 3, max(0, center - 2) : center + 3] = 128
+        for index, distance in enumerate(message.ranges):
+            if (
+                not math.isfinite(distance)
+                or distance < message.range_min
+                or distance > message.range_max
+            ):
+                continue
+            angle = message.angle_min + index * message.angle_increment
+            x = distance * math.cos(angle)
+            y = distance * math.sin(angle)
+            column = center - int(round(y / self.metres_per_pixel))
+            row = center - int(round(x / self.metres_per_pixel))
+            if 0 <= row < self.image_size and 0 <= column < self.image_size:
+                canvas[row, column] = 255
+
+        output = Image()
+        output.header = message.header
+        output.height = self.image_size
+        output.width = self.image_size
+        output.encoding = "mono8"
+        output.is_bigendian = False
+        output.step = self.image_size
+        output.data = canvas.tobytes()
+        self.publisher.publish(output)
+
+
+def main(args=None) -> None:
+    """Run the opt-in scan inspection conversion."""
+    rclpy.init(args=args)
+    node = LaserToImage()
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

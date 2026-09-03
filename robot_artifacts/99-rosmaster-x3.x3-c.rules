@@ -1,0 +1,8 @@
+# x3-c identities observed 2026-08-26.
+# Install on the robot host only after reviewing the recorded physical ports.
+
+# This CH340 exposes no serial. Its dedicated physical USB topology is 1-1.2.
+SUBSYSTEM=="tty", KERNELS=="1-1.2", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="robot/motor", GROUP="dialout", MODE="0660"
+
+# The Slamtec A1 CP2102 adapter reports serial 0001.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0001", SYMLINK+="robot/lidar", GROUP="dialout", MODE="0660"

@@ -542,3 +542,6 @@ A useful completion of this handoff should leave the repo with:
 - stationary encoder/motion probe results recorded
 - a clear next hardware-validation step
 - autostart still deferred until manual bringup passes
+# Historical evidence notice
+
+> This handoff describes the pre-cleanup workspace and deployment. Use it for incident history only; current setup and autostart gates are in `docs/`.

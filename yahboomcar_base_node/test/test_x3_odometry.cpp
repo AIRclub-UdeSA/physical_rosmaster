@@ -1,3 +1,17 @@
+// Copyright 2026 AIRclub UdeSA
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -81,14 +95,6 @@ TEST(X3Odometry, EvaluatesSourceFreshnessAtTimeoutBoundary)
   EXPECT_FALSE(yahboomcar_base_node::is_source_fresh(0.5001, 0.5));
   EXPECT_FALSE(yahboomcar_base_node::is_source_fresh(-0.1, 0.5));
   EXPECT_FALSE(yahboomcar_base_node::is_source_fresh(0.1, 0.0));
-}
-
-TEST(X3Odometry, FallsBackWhenJointStatesBecomeStale)
-{
-  EXPECT_TRUE(yahboomcar_base_node::should_use_joint_states(true, true, 0.1, 0.5));
-  EXPECT_FALSE(yahboomcar_base_node::should_use_joint_states(true, true, 0.6, 0.5));
-  EXPECT_FALSE(yahboomcar_base_node::should_use_joint_states(true, false, 0.1, 0.5));
-  EXPECT_FALSE(yahboomcar_base_node::should_use_joint_states(false, true, 0.1, 0.5));
 }
 
 TEST(X3Odometry, PublishesConfiguredFramesAndCovariances)

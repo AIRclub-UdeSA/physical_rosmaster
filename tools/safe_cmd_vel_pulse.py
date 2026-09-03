@@ -13,8 +13,8 @@ from geometry_msgs.msg import Twist
 from rclpy.node import Node
 
 
-MAX_LINEAR_SPEED = 0.30
-MAX_ANGULAR_SPEED = 0.75
+MAX_LINEAR_SPEED = 0.20
+MAX_ANGULAR_SPEED = 1.00
 MAX_DURATION = 15.0
 PUBLISH_RATE = 20.0
 

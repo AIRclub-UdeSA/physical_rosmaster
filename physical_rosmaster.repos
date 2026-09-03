@@ -1,0 +1,5 @@
+repositories:
+  ros2_astra_camera:
+    type: git
+    url: https://github.com/orbbec/ros2_astra_camera.git
+    version: f7e71d9ce806e788cb48d8580aac2c778fba4214

@@ -11,6 +11,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.egg-info/
 
 # C/C++ generated files
 *.o
@@ -25,10 +26,6 @@ __pycache__/
 rosbag2_*/
 bags/
 recordings/
-
-# Large third-party/generated SLAM artifacts kept outside Git
-yahboomcar_slam/params/ORBvoc.txt
-yahboomcar_slam/pcl/*.pcd
 
 # Local environment and editor files
 .env

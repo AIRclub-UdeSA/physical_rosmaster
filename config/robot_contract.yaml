@@ -1,0 +1,106 @@
+version: 1
+name: rosmaster_x3_platform
+simulator_reference:
+  repository: https://github.com/AIRclub-UdeSA/yahboom_rosmaster.git
+  commit: 772ba250bafeb0e93e651b7d8d78a4598feba118
+  probe: yahboom_rosmaster_gazebo/scripts/sensor_contract_probe.py
+
+command:
+  topic: /cmd_vel
+  type: geometry_msgs/msg/Twist
+  direction: input
+  default_publishers: 0
+
+topics:
+  /joint_states:
+    type: sensor_msgs/msg/JointState
+    owner: yahboomcar_bringup
+    required: true
+    joints:
+      - front_left_wheel_joint
+      - front_right_wheel_joint
+      - back_left_wheel_joint
+      - back_right_wheel_joint
+  /odom:
+    type: nav_msgs/msg/Odometry
+    owner: yahboomcar_base_node
+    required: true
+    frame_id: odom
+    child_frame_id: base_footprint
+    source: wheel_encoders
+  /imu/data:
+    type: sensor_msgs/msg/Imu
+    owner: imu_filter_madgwick
+    required: true
+    frame_id: imu_link
+    preprocessing:
+      algorithm: madgwick
+      use_magnetometer: false
+      publish_tf: false
+  /scan:
+    type: sensor_msgs/msg/LaserScan
+    owner: sllidar_ros2
+    required: true
+    frame_id: laser_link
+    preprocessing:
+      angle_compensation: true
+      cable_self_return_mask: true
+  /cam_1/color/image_raw:
+    type: sensor_msgs/msg/Image
+    owner: yahboomcar_astra
+    required: true
+    encoding: rgb8
+  /cam_1/color/camera_info:
+    type: sensor_msgs/msg/CameraInfo
+    owner: yahboomcar_astra
+    required: true
+    calibrated: true
+  /cam_1/depth/image_raw:
+    type: sensor_msgs/msg/Image
+    owner: yahboomcar_astra
+    required: true
+    encoding: 32FC1
+    unit: metre
+  /cam_1/depth/camera_info:
+    type: sensor_msgs/msg/CameraInfo
+    owner: yahboomcar_astra
+    required: true
+    calibrated: true
+  /cam_1/depth/color/points:
+    type: sensor_msgs/msg/PointCloud2
+    owner: yahboomcar_astra
+    required: true
+    frame_id: cam_1_depth_frame
+    fields: [x, y, z, rgb]
+
+tf:
+  dynamic:
+    - parent: odom
+      child: base_footprint
+      owner: yahboomcar_base_node
+  required_frames:
+    - base_footprint
+    - base_link
+    - laser_link
+    - imu_link
+    - cam_1_link
+    - cam_1_color_frame
+    - cam_1_color_optical_frame
+    - cam_1_depth_frame
+    - cam_1_depth_optical_frame
+
+hardware_extensions:
+  - /diagnostics
+  - /imu/data_raw
+  - /imu/mag
+  - /vel_raw
+  - /voltage
+  - /edition
+  - /Buzzer
+  - /RGBLight
+  - /scan_filtered
+
+excluded_simulator_interfaces:
+  - /clock
+  - /ground_truth/odom
+  - calculated_ground_truth

@@ -96,3 +96,6 @@ Ground-truth floor calibration still requires a pack confirmed fully charged
 with paired multimeter/controller readings, exact marked CPR measurement, and
 externally measured repeatable floor trials. The earlier generic `> 12.0 V`
 floor threshold was superseded after this report's lifted run.
+# Historical validation evidence
+
+> This lifted report was recorded against the former `/odom_raw` + EKF graph. Encoder order/sign results remain evidence; current canonical wheel odometry publishes `/odom` directly.

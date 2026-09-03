@@ -12,7 +12,7 @@ when more people run it, validate it carefully, and document what they find.
 There are two separate contexts, and most contributions only need the first:
 
 - **Workstation** — source review, Git work, documentation, hardware-free
-  tests:
+  tests. Install `python3-vcstool` first if the `vcs` command is unavailable:
 
   ```bash
   mkdir -p ~/rosmaster_physical_ws/src
@@ -21,48 +21,106 @@ There are two separate contexts, and most contributions only need the first:
 
   cd ~/rosmaster_physical_ws
   source /opt/ros/humble/setup.bash
-  colcon build --symlink-install --packages-select yahboomcar_base_node
-  colcon test --packages-select yahboomcar_base_node --ctest-args -R test_x3_odometry
+  vcs import src < src/physical_rosmaster/physical_rosmaster.repos
+  rosdep install --from-paths src --ignore-src -r -y
+  colcon build --symlink-install
+  source install/setup.bash
+  ```
+
+  Run the package gate from the workspace, followed by the standalone tool
+  checks from the repository root. Package tests, including the motor runtime
+  suites, run once through `colcon test`:
+
+  ```bash
+  cd ~/rosmaster_physical_ws
+  source /opt/ros/humble/setup.bash
+  source install/setup.bash
+  export ROS_LOG_DIR=/tmp/physical_rosmaster-ros-logs
+  mkdir -p "$ROS_LOG_DIR"
+  export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+  colcon test --packages-select \
+    laserscan_to_point_pulisher sllidar_ros2 yahboomcar_astra \
+    yahboomcar_base_node yahboomcar_bringup yahboomcar_ctrl \
+    yahboomcar_description yahboomcar_visual
+  colcon test-result --verbose
+
+  cd ~/rosmaster_physical_ws/src/physical_rosmaster
+  export PYTHONPATH="$PWD/yahboomcar_bringup:$PWD/tools:$PYTHONPATH"
+  python3 -m pytest -q \
+    tools/test_rosmaster_lib_probe.py \
+    tools/test_motor_live_loss_probe.py \
+    tools/test_motor_live_loss_ros_smoke.py \
+    tools/test_physical_contract_probe.py \
+    tools/test_safe_cmd_vel_pulse.py
+  ```
+
+  The current workstation needs plugin autoload disabled because an unrelated
+  globally installed pytest plugin is incompatible with its pytest version.
+  ROS tests also require a writable `ROS_LOG_DIR`.
+  The live-loss ROS smoke test must run on Linux with permission to enumerate
+  local network interfaces and open localhost DDS sockets.
+
+  If the exact reviewed `Rosmaster_Lib.py` is available locally, also run its
+  real-pyserial pseudo-terminal gate without copying it into the repository:
+
+  ```bash
+  export ROSMASTER_V339_SOURCE=/absolute/path/to/Rosmaster_Lib.py
+  python3 -m pytest -q tools/test_rosmaster_v339_pty.py
   ```
 
 - **Robot** — inside the robot's `rosmaster_humble` Docker container, cloned
   into `/root/yahboomcar_ws/src/physical_rosmaster`. See
-  [Quick Start: Robot](README.md#quick-start-robot) and
-  `docs/setup_guide_ros2_humble_autostart.md` for the full clone/build/
-  autostart procedure. Back up the existing `src` tree before replacing a
-  robot workspace.
+  [Robot setup and manual bringup](README.md#robot-setup-and-manual-bringup) and
+  [the setup and autostart gate](docs/setup_guide_ros2_humble_autostart.md) for
+  the clone, build, and manual-validation procedure. Back up the existing
+  `src` tree before replacing a robot workspace. Autostart is not authorized.
 
 `Rosmaster_Lib` is not vendored here — on the robot it's copied in from the
-Yahboom host installation.
+Yahboom host installation. Its allowlisted source hash is checked after Python
+imports it. That is a compatibility/version gate, not supply-chain attestation.
 
-## Good first contributions
+## Current priorities
 
-- **Close validation gates.** The odometry path has floor-tested wiring and
-  sign conventions, but a true lifted repetition with ground truth is still
-  outstanding, and per-wheel magnitude/yaw bias is only provisionally
-  characterized. See [Odometry Status](README.md#odometry-status),
-  `agents/x3-c_validation_checklist.md`, and `docs/odometry_validation.md`
-  for the open items.
+- **Close validation gates.** Runtime commit `a08b097` still needs clean robot
+  deployment, the positive/startup-absence/restoration/live-loss/restoration
+  sequence, bounded active-stop validation, and then supervised lifted/floor
+  motion acceptance. Use [Rollout status](README.md#rollout-status),
+  [the robot checklist](docs/robot_side_verification_todo.md), and
+  [odometry validation](docs/odometry_validation.md).
 - **Clean up licensing.** Several package manifests still have
-  `TODO: Package description` and `TODO: License declaration` — see
-  [License Caveat](README.md#license-caveat). Tracing provenance package by
-  package is welcome.
+  improved metadata, but the repository-wide Yahboom/Slamtec provenance and
+  licensing audit is incomplete. See
+  [Provenance and licensing](README.md#provenance-and-licensing).
 - **Fix bugs.** `docs/troubleshooting/README.md` is an incident-driven index
   of known robot failure modes.
-- **Work through the task list.** `agents/physical_rosmaster_todo.md` and
-  `agents/rosmaster_physical_audit.md` track open work and known gaps.
 
 ## Repository Layout
 
-Buildable packages (see [Package Inventory](README.md#package-inventory) for
-the full, current list): `yahboomcar_bringup`, `yahboomcar_base_node`,
-`yahboomcar_ctrl`, `yahboomcar_description`, `yahboomcar_nav`,
-`yahboomcar_slam`, `sllidar_ros2`, `robot_pose_publisher`, and others.
-`yahboomcar_KCFTracker`, `robot_pose_publisher_ros2`, and `yahboomcar_point`
-are present but ignored via `COLCON_IGNORE`.
+The repository contains exactly the eight packages in
+[Retained packages](README.md#retained-packages): `yahboomcar_bringup`,
+`yahboomcar_base_node`, `yahboomcar_description`, `yahboomcar_ctrl`,
+`yahboomcar_astra`, `sllidar_ros2`, `yahboomcar_visual`, and the historically
+spelled `laserscan_to_point_pulisher`. Removed navigation, SLAM, localization,
+EKF, and application behavior are not hidden local packages; recover them from
+Git history only when investigating the former architecture.
 
 Read `docs/workstation_and_robot_workflow.md` before deciding whether a
 change needs to be validated on the workstation, on the robot, or both.
+
+## Runtime safety model
+
+Do not infer controller liveness from cached getters. Runtime `a08b097` requires
+checksum-valid `0x0A` speed/battery, `0x0D` encoder, and `0x0B`-or-`0x0E` raw-IMU
+arrivals to remain fresh. A terminal feedback or observed serial-write failure
+suppresses controller-derived output, nonzero motion commands, and all
+RGB/buzzer requests; emits an `ERROR` diagnostic; exits the driver; and causes
+the strict launch to shut down the graph.
+
+That contract does not prove a physical stop. Host serial-write completion is
+not controller acknowledgement, and zero-command attempts are not proof that
+the controller executed them. Any PR that changes this path must keep those
+claims separate and must defer physical-stop acceptance to a supervised robot
+test using available feedback and external observation.
 
 ## Coding style
 
@@ -79,9 +137,10 @@ Changes to `main` must go through a pull request:
 1. Create a feature branch (`git checkout -b feature/my-change`) and push it.
 2. Build and test on the workstation first. If your change touches motion,
    the driver, or odometry, follow the validation procedure in
-   `docs/odometry_validation.md` / `agents/x3-c_validation_checklist.md` —
-   use the bounded pulse tool (`tools/safe_cmd_vel_pulse.py`) with the robot
-   securely lifted, never floor-test unsupervised.
+   [the robot checklist](docs/robot_side_verification_todo.md) and
+   [odometry validation](docs/odometry_validation.md). Use the bounded pulse
+   tool (`tools/safe_cmd_vel_pulse.py`) with the robot securely lifted; never
+   floor-test unsupervised.
 3. If you change runtime behavior (a launch arg, a topic, a driver default),
    say so explicitly in the PR description — this affects a shared physical
    robot.
@@ -97,9 +156,10 @@ Changes to `main` must go through a pull request:
   safety limits, or timeout behavior, call that out clearly in the PR so
   reviewers know to check it carefully.
 - Don't overstate validation status — if something is floor-tested but not
-  ground-truth-verified, say so, the same way `docs/odometry_validation.md`
-  already does.
+  ground-truth-verified, say so. In particular, workstation tests do not close
+  the pending robot-validation gate for `a08b097`.
 - This repository includes Yahboom-derived source and a vendored copy of
-  `sllidar_ros2`; see [License Caveat](README.md#license-caveat) before
+  `sllidar_ros2`; see
+  [Provenance and licensing](README.md#provenance-and-licensing) before
   assuming clean licensing on anything you add or modify.
 - Be decent to each other. Assume good faith, keep it constructive.

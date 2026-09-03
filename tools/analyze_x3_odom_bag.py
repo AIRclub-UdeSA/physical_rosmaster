@@ -17,10 +17,10 @@ from rosidl_runtime_py.utilities import get_message
 
 NANOSECONDS_PER_SECOND = 1_000_000_000
 WHEEL_NAMES = (
-    "front_left_joint",
-    "front_right_joint",
-    "back_left_joint",
-    "back_right_joint",
+    "front_left_wheel_joint",
+    "front_right_wheel_joint",
+    "back_left_wheel_joint",
+    "back_right_wheel_joint",
 )
 PULSE_LOG_PATTERN = re.compile(
     r"Starting bounded pulse: "
@@ -74,7 +74,7 @@ def read_topics(bag_path: Path) -> dict[str, list[StampedMessage]]:
     wanted = {
         "/cmd_vel",
         "/joint_states",
-        "/odom_raw",
+        "/odom",
         "/rosout",
         "/vel_raw",
         "/voltage",
@@ -235,7 +235,7 @@ def summarize(
     messages: dict[str, list[StampedMessage]], settle_seconds: float
 ) -> None:
     """Print one deterministic summary for each recorded command window."""
-    required = {"/joint_states", "/odom_raw"}
+    required = {"/joint_states", "/odom"}
     missing = sorted(required - messages.keys())
     if missing:
         raise RuntimeError(f"bag is missing required topics: {missing}")
@@ -264,10 +264,10 @@ def summarize(
         )
 
         start_odom = nearest_at_or_before(
-            messages["/odom_raw"], window.start_ns
+            messages["/odom"], window.start_ns
         ).message
         end_odom = nearest_at_or_after(
-            messages["/odom_raw"], window.end_ns + settle_ns
+            messages["/odom"], window.end_ns + settle_ns
         ).message
         odom_delta = (
             end_odom.pose.pose.position.x

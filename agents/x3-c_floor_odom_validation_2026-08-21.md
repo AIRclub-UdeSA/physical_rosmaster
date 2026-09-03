@@ -104,3 +104,6 @@ that physical forward motion, four-wheel feedback, firmware velocity, and raw
 odometry respond together. It does not calibrate encoder CPR, linear/yaw scale,
 or covariance. Those require marked wheel turns and repeated externally measured
 straight, strafe, CW, and CCW trials.
+# Historical validation evidence
+
+> This floor report was recorded against the former `/odom_raw` + EKF graph. Motion and encoder observations remain evidence; current canonical wheel odometry publishes `/odom` directly.

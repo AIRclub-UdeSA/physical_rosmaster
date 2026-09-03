@@ -319,3 +319,6 @@ generic `> 12.0 V` threshold.
   remains under operator control and was not independently switched off.
 - Contrary to the earlier session record, no true lifted powered validation was
   performed on 2026-08-20. The required validation was completed on 2026-08-21.
+# Historical validation evidence
+
+> This report describes the former `/odom_raw` + EKF graph. Encoder and hardware observations remain useful, but its launch and topic instructions are obsolete.

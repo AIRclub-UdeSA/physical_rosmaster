@@ -2,10 +2,31 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>yahboomcar_astra</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="13377528435@sina.cn">nx-ros2</maintainer>
-  <license>TODO: License declaration</license>
+  <version>0.1.0</version>
+  <description>ROSMASTER X3 Astra hardware contract adapter.</description>
+  <maintainer email="airclub@udesa.edu.ar">AIRclub UdeSA</maintainer>
+  <license>Apache-2.0</license>
+
+  <!--
+    The pinned upstream astra_camera package uses these build dependencies in
+    CMake but does not declare them in its package.xml. Keep them here so the
+    workspace-level rosdep command prepares a clean robot consistently.
+  -->
+  <build_depend>eigen</build_depend>
+  <build_depend>libgflags-dev</build_depend>
+  <build_depend>libgoogle-glog-dev</build_depend>
+  <build_depend>libopencv-dev</build_depend>
+  <build_depend>libusb-1.0-dev</build_depend>
+  <build_depend>libuvc-dev</build_depend>
+  <build_depend>pkg-config</build_depend>
+  <build_depend>rcutils</build_depend>
+  <build_depend>tf2_eigen</build_depend>
+
+  <exec_depend>astra_camera</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
