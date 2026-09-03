@@ -69,7 +69,7 @@
 
   <xacro:mesh_link name="laser_link" mesh="laser_link.STL" material="sensor_grey" mass="0.048"/>
   <xacro:fixed_joint name="laser_joint" parent="base_link" child="laser_link"
-                     xyz="0.0435 0.0000526 0.11" rpy="0 0 0"/>
+                     xyz="0.0435 0.0000526 0.11" rpy="0 0 ${pi}"/>
 
   <xacro:mesh_link name="cam_1_link" mesh="camera_link.STL" material="sensor_grey" mass="0.01"/>
   <xacro:fixed_joint name="camera_mount_joint" parent="base_link" child="cam_1_link"
