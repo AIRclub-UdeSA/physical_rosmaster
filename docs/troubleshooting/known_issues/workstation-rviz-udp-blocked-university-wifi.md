@@ -1,10 +1,16 @@
-# Workstation RViz Cannot Reach the Robot Over University WiFi (UDP Blocked)
+# Workstation RViz Cannot Reach the Robot (ROS 2 Distro Mismatch)
 
 ## Status
 
-Open, deferred. Diagnosed on `x3-c` on 2026-09-02. Not blocking: the full
-acceptance sequence and autostart were both already validated independently
-of this. Parked for the project owner to pick up later; no fix attempted yet.
+Resolved on 2026-09-03. Originally diagnosed on `x3-c` on 2026-09-02 and
+parked with WiFi UDP blocking as the leading theory; retested on 2026-09-03
+from a second workstation running ROS 2 Humble (matching the robot) on
+`ROS_DOMAIN_ID=11`, which worked immediately — full topic discovery and live
+data (`ros2 topic echo /voltage`, RViz2). The original Jazzy workstation was
+never retried against a matching robot-side distro, so the primary cause is
+recorded as the ROS 2 Humble/Jazzy mismatch, not the WiFi network. See
+[Root Cause](#root-cause) for the one piece of evidence that doesn't fully
+fit this explanation and remains unresolved.
 
 ## Symptom
 
@@ -43,30 +49,44 @@ ruling out ordinary link flakiness as the explanation.
 
 ## Root Cause
 
-The WiFi network between the workstation and the robot does not forward UDP
-traffic between wireless clients. Confirmed directly for multicast (above).
-A targeted workaround — a Fast DDS `initialPeersList` profile pointing the
-workstation's discovery directly at the robot's unicast IP, bypassing
-multicast for discovery entirely — also produced zero data, so the
-restriction is broader than multicast alone; ordinary UDP unicast between
-these two clients appears blocked too. TCP (SSH) is unaffected. This is
-consistent with a common university/enterprise WiFi client-isolation policy,
-which this network is presumed to run, though the access point's
-configuration itself was not inspected.
+**Primary cause, confirmed 2026-09-03:** the original workstation ran ROS 2
+Jazzy against the robot's ROS 2 Humble container. Cross-distro RMW/Fast DDS
+interoperability is not guaranteed by the ROS 2 project (different default
+Fast DDS versions per distro, differing XTypes/type-discovery behavior), and
+matches the exact symptom: participant/topic *names* discovered fine
+(basic RTPS participant discovery), while actual data delivery and dynamic
+type resolution (`ros2 topic echo`, `ros2 topic info -v`) failed completely.
+Retesting from a second workstation on ROS 2 Humble — otherwise the same
+`ROS_DOMAIN_ID=11`, same general network — worked immediately with no other
+change.
 
-ROS 2's default RMW (Fast DDS, and DDS implementations generally) uses UDP
-for both discovery and data. Neither endpoint's own ROS/DDS configuration can
-work around a network-level policy that drops UDP between clients — this is
-not fixable from ROS settings alone.
+**Unresolved wrinkle:** the 2026-09-02 diagnosis also used `ros2 multicast
+send`/`ros2 multicast receive`, a raw UDP multicast probe bundled with the
+ROS 2 CLI that does not go through rclpy, DDS participant creation, or any
+distro-specific typesupport — it should behave identically regardless of ROS
+distro. That test showed the robot sending and the original workstation
+receiving nothing, which points at a genuine network-level block and is not
+explained by a distro mismatch alone. The 2026-09-03 retest did not control
+for this: it was not confirmed whether the second workstation reached the
+robot over the same WiFi segment as the original one, or by a different path
+(wired, different network). So it remains possible both factors were real —
+distro mismatch breaking ROS-level tools, plus an independent network
+restriction affecting raw UDP — but only the distro fix was verified needed
+to reach a working state, so it's what's recorded as the fix here. If RViz
+or CLI tools break again from a workstation already confirmed on ROS 2
+Humble, revisit the WiFi/UDP theory in this section's history.
 
 ## Decision
 
-Parked by the project owner on 2026-09-02. Nothing delivered today depends on
-this; revisit when convenient.
+Considered resolved by the project owner on 2026-09-03: use a workstation
+running the same ROS 2 distro as the robot (Humble) for any live RViz/CLI
+session against it. No further network-level workaround pursued unless the
+wrinkle above resurfaces on a distro-matched machine.
 
-## What Would Close This Properly
+## What Would Close the Unresolved Wrinkle
 
-Three realistic paths, not yet chosen between:
+If a distro-matched workstation ever fails the same way, these are the
+remaining paths, not yet needed:
 
 - **A WebSocket/TCP-based viewer** (e.g. `rosbridge_server` inside the
   container plus a browser client) — sidesteps DDS/UDP entirely by riding on

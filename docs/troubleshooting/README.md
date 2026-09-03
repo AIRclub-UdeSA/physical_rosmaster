@@ -33,4 +33,4 @@ Each reusable issue page should cover:
 - [Root filesystem full causing LightDM login loop and Docker growth](known_issues/root-filesystem-full-login-loop.md)
 - [Stale colcon install state after a failed package build](known_issues/stale-colcon-install-state.md)
 - [Hostname resolution warning on the Raspberry Pi host](known_issues/hostname-resolution.md)
-- [Workstation RViz cannot reach the robot over university WiFi (UDP blocked)](known_issues/workstation-rviz-udp-blocked-university-wifi.md)
+- [Workstation RViz cannot reach the robot (ROS 2 distro mismatch, resolved)](known_issues/workstation-rviz-udp-blocked-university-wifi.md)
