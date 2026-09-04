@@ -1,0 +1,27 @@
+name: Block AI co-author
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-commit-messages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject commits co-authored by Claude/Anthropic
+        run: |
+          set -e
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          BAD=$(git log "$BASE..$HEAD" --format="%H %B" | grep -iE "co-authored-by:.*claude|noreply@anthropic\.com" || true)
+          if [ -n "$BAD" ]; then
+            echo "Se encontraron commits con coautoria de Claude/Anthropic:"
+            echo "$BAD"
+            echo
+            echo "Sacá la línea 'Co-Authored-By: Claude ...' del mensaje del commit y volvé a pushear."
+            exit 1
+          fi
