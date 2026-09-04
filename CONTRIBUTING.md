@@ -82,9 +82,10 @@ There are two separate contexts, and most contributions only need the first:
 - **Robot** — inside the robot's `rosmaster_humble` Docker container, cloned
   into `/root/yahboomcar_ws/src/physical_rosmaster`. See
   [Robot setup and manual bringup](README.md#robot-setup-and-manual-bringup) and
-  [the setup and autostart gate](docs/setup_guide_ros2_humble_autostart.md) for
-  the clone, build, and manual-validation procedure. Back up the existing
-  `src` tree before replacing a robot workspace. Autostart is not authorized.
+  [the setup guide](docs/setup_guide_ros2_humble_autostart.md) for the clone,
+  build, and per-robot hardware procedure. Back up the existing `src` tree
+  before replacing a robot workspace. Autostart is accepted for this stack;
+  see [docs/autostart_setup.md](docs/autostart_setup.md).
 
 `Rosmaster_Lib` is not vendored here — on the robot it's copied in from the
 Yahboom host installation. Its allowlisted source hash is checked after Python
@@ -92,10 +93,13 @@ imports it. That is a compatibility/version gate, not supply-chain attestation.
 
 ## Current priorities
 
-- **Close validation gates.** Runtime commit `a08b097` still needs clean robot
-  deployment, the positive/startup-absence/restoration/live-loss/restoration
-  sequence, bounded active-stop validation, and then supervised lifted/floor
-  motion acceptance. Use [Rollout status](README.md#rollout-status),
+- **Close the remaining validation gates.** `x3-c` already passed the core
+  robot deployment, startup-absence/restoration/live-loss sequence, and a
+  qualitative floor pass; autostart is separately installed and
+  reboot-validated. Still open: the full 3-rep measured floor protocol with
+  external measurement, operator-tool (joystick/keyboard/calibration) checks,
+  and a simulator/physical consumer-parity proof. Use
+  [Rollout status](README.md#rollout-status),
   [the robot checklist](docs/robot_side_verification_todo.md), and
   [odometry validation](docs/odometry_validation.md).
 - **Fix bugs.** `docs/troubleshooting/README.md` is an incident-driven index

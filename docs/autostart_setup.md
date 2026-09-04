@@ -1,11 +1,14 @@
 # Autostart install and validation
 
-Installs the versioned systemd autostart described in
-[setup_guide_ros2_humble_autostart.md](setup_guide_ros2_humble_autostart.md)'s
-"Autostart decision" section. Do this only after the robot has passed the
+Installs the versioned systemd autostart. Autostart is already validated for
+this platform code — `x3-c` passed the
 [robot-side verification checklist](robot_side_verification_todo.md) sections
-1-6. Run every command on the robot's host, not inside the container, unless
-shown otherwise.
+1-6 before this was first installed there, but that checklist is
+`x3-c`-specific history, not a precondition for another robot. For any other
+X3, do this once
+[setup_guide_ros2_humble_autostart.md](setup_guide_ros2_humble_autostart.md)'s
+smoke check passes. Run every command on the robot's host, not inside the
+container, unless shown otherwise.
 
 ## 1. File layout
 
@@ -30,7 +33,7 @@ rules template works.
 
 ## 2. Discover per-robot values
 
-Follow [setup_guide_ros2_humble_autostart.md section 4](setup_guide_ros2_humble_autostart.md#4-identify-required-hardware)
+Follow [setup_guide_ros2_humble_autostart.md section 3](setup_guide_ros2_humble_autostart.md#3-identify-this-robots-hardware)
 to record the motor, LiDAR, and Astra identities for this robot. You need:
 
 - the motor serial path (prefer `/dev/serial/by-id/...`; fall back to the
