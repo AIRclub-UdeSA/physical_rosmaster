@@ -68,6 +68,17 @@ There are two separate contexts, and most contributions only need the first:
   python3 -m pytest -q tools/test_rosmaster_v339_pty.py
   ```
 
+  Every pull request runs this same build-and-test gate automatically (see
+  [`.github/workflows/hardware-free-checks.yml`](.github/workflows/hardware-free-checks.yml)),
+  minus `test_rosmaster_v339_pty.py` — CI never has `Rosmaster_Lib.py`
+  available, since it isn't vendored here for licensing reasons. CI also
+  skips vendoring `ros2_astra_camera` (`rosdep install --skip-keys
+  astra_camera`): it's `exec_depend`-only for `yahboomcar_astra`, and no
+  hardware-free test imports or launches it, so building the full camera SDK
+  on every run would cost time without adding coverage. Import it locally
+  with `vcs` as shown above if you actually need to build or run the camera
+  driver.
+
 - **Robot** — inside the robot's `rosmaster_humble` Docker container, cloned
   into `/root/yahboomcar_ws/src/physical_rosmaster`. See
   [Robot setup and manual bringup](README.md#robot-setup-and-manual-bringup) and

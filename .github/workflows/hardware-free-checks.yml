@@ -1,0 +1,108 @@
+name: Hardware-free checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hardware-free-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hardware-free:
+    name: ROS 2 Humble build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: ros:humble-ros-base-jammy
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      ROS_DISTRO: humble
+      ROS_LOG_DIR: ${{ github.workspace }}/artifacts/ros-logs
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install workspace dependencies
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            python3-rosdep
+          if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
+            rosdep init
+          fi
+          rosdep update --rosdistro humble
+          # astra_camera is a pinned Orbbec fork (physical_rosmaster.repos),
+          # not a resolvable rosdep key, and it's exec_depend-only for
+          # yahboomcar_astra: no hardware-free test imports or launches it
+          # (test_astra_launch.py only inspects a Node action object, never
+          # resolves the package). Skip it instead of vendoring the whole
+          # camera SDK into every CI run.
+          rosdep install \
+            --from-paths . \
+            --ignore-src \
+            --rosdistro humble \
+            --skip-keys astra_camera \
+            --default-yes
+          mkdir -p "${ROS_LOG_DIR}"
+
+      - name: Build the workspace
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install --event-handlers console_direct+
+
+      - name: Run package tests
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          test_status=0
+          colcon test --packages-select \
+            laserscan_to_point_pulisher sllidar_ros2 yahboomcar_astra \
+            yahboomcar_base_node yahboomcar_bringup yahboomcar_ctrl \
+            yahboomcar_description yahboomcar_visual \
+            --event-handlers console_direct+ \
+            --return-code-on-test-failure \
+            || test_status=$?
+          colcon test-result --verbose
+          exit "${test_status}"
+
+      - name: Run standalone tool tests
+        shell: bash
+        # tools/test_rosmaster_v339_pty.py is intentionally excluded: it only
+        # runs against the real, unvendored Rosmaster_Lib.py via
+        # ROSMASTER_V339_SOURCE, which is not available here for licensing
+        # reasons (see CONTRIBUTING.md).
+        run: |
+          source /opt/ros/humble/setup.bash
+          export PYTHONPATH="${GITHUB_WORKSPACE}/yahboomcar_bringup:${GITHUB_WORKSPACE}/tools:${PYTHONPATH}"
+          python3 -m pytest -q \
+            tools/test_rosmaster_lib_probe.py \
+            tools/test_motor_live_loss_probe.py \
+            tools/test_motor_live_loss_ros_smoke.py \
+            tools/test_physical_contract_probe.py \
+            tools/test_safe_cmd_vel_pulse.py
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hardware-free-checks-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/**/test_results/**
+            build/**/Testing/**
+            log/**
+            artifacts/ros-logs/**
