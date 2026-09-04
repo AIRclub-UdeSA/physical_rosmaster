@@ -193,54 +193,26 @@ The expected clone path is `/root/yahboomcar_ws/src/physical_rosmaster` in the
 dependency and is not vendored here. Its source hash verifies the reviewed
 runtime shape after import; it does not establish package provenance or trust.
 
-Before constructing the driver, run the fail-closed installed-source preflight
-from the repository root:
+For bringing up an X3 that isn't `x3-c` — clone/build, identify this unit's
+hardware, and one smoke check that it's wired right — follow
+[docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md).
+It's deliberately fast: the platform code itself is already validated, so it
+doesn't re-run the one-time protocol/safety proofs `x3-c` went through.
 
-```bash
-cd /root/yahboomcar_ws/src/physical_rosmaster
-python3 tools/rosmaster_lib_probe.py --hash-only
-```
-
-Continue only if it exits `0` and reports the supported V3.3.9 digest. A
-nonzero result is a deployment blocker; do not substitute visual comparison of
-hash output.
-
-Discover and configure stable hardware identities before launch:
+In short, once cloned and built:
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /root/yahboomcar_ws/install/setup.bash
-ls -l /dev/serial/by-id
-lsusb
-ros2 run astra_camera list_devices_node
-```
-
-Set per-robot identities in the container environment:
-
-```bash
 export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
 export ROSMASTER_LIDAR_PORT=/dev/robot/lidar
 export ROSMASTER_ASTRA_SERIAL="REPLACE_WITH_ASTRA_SERIAL"
-```
 
-Before launch, stop every competing legacy/controller process, verify that no
-command source or `/cmd_vel` publisher remains, and secure or lift all four
-wheels. Then launch manually:
-
-```bash
 cd /root/yahboomcar_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
 ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py
 ```
 
-Normal bringup shuts down when a required process exits. The motor driver
-fails terminally on missing/stale required report channels, receiver failure,
-or an observed serial-write failure. The camera adapter fails if all valid
-RGB-D streams do not appear within its startup deadline. The physical probe
-requires current healthy controller and encoder `/diagnostics` before passing.
-
-In a second shell, run the contract gate:
+Then, in a second shell, confirm it came up healthy:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -249,27 +221,10 @@ cd /root/yahboomcar_ws/src/physical_rosmaster
 python3 tools/physical_contract_probe.py
 ```
 
-After the positive contract, test motor absence at startup. Stop bringup,
-disconnect only the motor controller, relaunch, and require the driver never to
-become healthy and the strict graph to drain. Reconnect it, start a clean
-launch, and pass the complete physical contract again before the subsequent
-supervised no-motion live-loss gate.
-
-For live loss, export the same motor path in the probe shell, create the
-evidence directory, and pass both explicitly:
-
-```bash
-export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
-mkdir -p /root/rosmaster-recovery-evidence
-python3 tools/motor_live_loss_probe.py \
-  --device "$ROSMASTER_MOTOR_PORT" \
-  --confirm-wheels-secured \
-  --output /root/rosmaster-recovery-evidence/motor-live-loss.json
-```
-
-Follow [the workstation/robot workflow](docs/workstation_and_robot_workflow.md)
-for the `ARMED`, second restoration, and final positive-contract sequence.
-This probe is not an active-motion stop test.
+Normal bringup shuts down when a required process exits — the motor driver on
+missing/stale report channels, receiver failure, or a serial-write failure;
+the camera adapter if RGB-D streams don't appear within its startup deadline.
+The physical probe requires healthy controller and encoder `/diagnostics`.
 
 ## Operator tools
 
@@ -294,7 +249,7 @@ Manual control is capped at `0.20 m/s` linear and `1.0 rad/s` angular, with lowe
 
 ## Rollout status
 
-Autostart remains blocked. Runtime commit `a08b097` and the robot-validation
+Runtime commit `a08b097` and the robot-validation
 tooling hardened by `bc965a6` passed full robot deployment and validation on
 `x3-c` on 2026-09-02, at exact reviewed head `e34f8a3`.
 
@@ -322,8 +277,10 @@ The gate is:
    calibration) checks remain open;
 5. run one minimal consumer against simulator and hardware without remaps.
 
-Item 4's full measured protocol, operator tools, and item 5 remain open. Once
-they pass, a new autostart routine may be designed. Lifted-motion diagnosis
+Item 4's full measured protocol, operator tools, and item 5 remain open.
+Autostart itself is no longer gated on them, though: it has already been
+designed, installed, enabled, and reboot-validated on `x3-c` — see
+[docs/autostart_setup.md](docs/autostart_setup.md). Lifted-motion diagnosis
 also found a repeatable ~2-4x front-right-vs-back-left actuation imbalance,
 most pronounced below roughly `0.10 m/s`/`0.60 rad/s` per-wheel-equivalent;
 the owner is tracking this as an accepted known platform characteristic (see
@@ -332,7 +289,7 @@ rather than a blocker.
 
 ## Documentation
 
-- [docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md): manual robot setup and the explicit autostart gate;
+- [docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md): fast setup for an additional fleet robot;
 - [docs/workstation_and_robot_workflow.md](docs/workstation_and_robot_workflow.md): workstation/robot responsibilities;
 - [docs/robot_side_verification_todo.md](docs/robot_side_verification_todo.md): mandatory first-robot verification checklist and evidence record;
 - [docs/robot_side_next_moves.md](docs/robot_side_next_moves.md): ordered `x3-c` remediation and acceptance runbook;

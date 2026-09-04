@@ -12,8 +12,12 @@ External projects own all behavior and run on top of the same public topics and 
 
 - validated pre-cleanup baseline: `aafed44`;
 - recovery tag: `pre-platform-contract-cleanup`;
-- implementation branch: `platform/simulator-parity`;
-- autostart: blocked until robot-side acceptance.
+- `platform/simulator-parity` merged to `main` 2026-09-03 (PR #3); `main` is
+  the implementation state now;
+- autostart: accepted and enabled on `x3-c`. Additional robots follow
+  [docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md)
+  then [docs/autostart_setup.md](docs/autostart_setup.md) directly — no
+  separate per-robot acceptance gate.
 
 ## Runtime graph
 
@@ -52,17 +56,20 @@ python3 tools/physical_contract_probe.py
 
 The physical probe requires all public sensor topics, unique sensor/odometry publishers, healthy controller and encoder diagnostics, finite and increasing data, valid calibration, metric depth, XYZRGB fields, correct frames, odometry TF ownership, and time-resolvable `odom` → sensor transforms. It also verifies that default bringup has no `/cmd_vel` publisher.
 
-## Hardware gate still outstanding
+## Hardware gate: done for the platform, not per-robot
 
-Workstation validation cannot establish the camera model/serial, USB/udev state, encoder signs on another unit, sensor calibration validity, or floor behavior. On one X3:
+`x3-c` completed the one-time platform gate (workstation validation cannot
+establish camera model/serial, USB/udev state, encoder signs, sensor
+calibration, or floor behavior, so all of that had to happen on real
+hardware): import, hardware identity, manual strict bringup and the
+non-motion probe, lifted and floor tests, and a consumer comparison against
+the simulator without remaps. That proved the *code*; it does not need
+repeating for each additional robot in the fleet.
 
-1. import `physical_rosmaster.repos` and install dependencies with `rosdep`;
-2. identify motor, A1, and Astra stable identities;
-3. run manual strict bringup and the non-motion probe;
-4. run lifted and bounded floor tests from the current docs;
-5. compare one consumer against the simulator without remaps.
-
-Do not prepare or enable a new autostart routine before that gate passes.
+For another X3 running the same accepted `main` code, follow
+[docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md):
+clone/build, identify that unit's hardware, and one smoke check that it's
+wired correctly — fast, and deliberately not a repeat of the above.
 
 ## Historical evidence
 
