@@ -17,8 +17,6 @@ set -eo pipefail
 mkdir -p ~/rosmaster_physical_ws/src
 cd ~/rosmaster_physical_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
-# Current pre-merge x3-c rollout: select the reviewed platform branch using
-# physical_rosmaster/docs/robot_side_next_moves.md before importing dependencies.
 
 cd ~/rosmaster_physical_ws
 vcs import src < src/physical_rosmaster/physical_rosmaster.repos
@@ -32,11 +30,12 @@ colcon build --symlink-install
 )
 ```
 
-This default clone is the canonical workflow after the architecture reaches
-`main`. For the current pre-merge `x3-c` rollout, select one reviewed,
-published `platform/simulator-parity` head at an exact reviewed full SHA that
-contains both `a08b097` and `bc965a6` before the `vcs import`; use
-[robot_side_next_moves.md](robot_side_next_moves.md).
+This default clone is the canonical workflow: the architecture reached `main`
+on 2026-09-03, and `main` contains both `a08b097` and `bc965a6`. The
+`platform/simulator-parity`-branch, SHA-pinned procedure in
+[robot_side_next_moves.md](robot_side_next_moves.md) was how `x3-c` got
+through that merge; it is a historical record, not a step to repeat for
+another robot.
 
 Expected local package inventory:
 
@@ -116,8 +115,8 @@ Expected paths:
 
 Before changing an existing workspace, put source backups outside `/root/yahboomcar_ws`. A backup containing packages anywhere under the workspace causes duplicate package discovery.
 
-For the current pre-merge `x3-c` rollout, replace the reviewed-SHA marker and
-verify the exact published revision before importing or building:
+Before importing or building, verify the checkout is clean, on `main`, and
+matches the remote:
 
 ```bash
 (
@@ -125,16 +124,14 @@ set -eo pipefail
 
 cd /root/yahboomcar_ws/src/physical_rosmaster
 git fetch origin
-git checkout platform/simulator-parity
+git checkout main
 git pull --ff-only
 test -z "$(git status --porcelain)"
-test "$(git rev-parse HEAD)" = \
-  "$(git rev-parse origin/platform/simulator-parity)"
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 git merge-base --is-ancestor \
   a08b097b22781ca500fd61c01164a4e7167b3873 HEAD
 git merge-base --is-ancestor \
   bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80 HEAD
-test "$(git rev-parse HEAD)" = "REPLACE_WITH_REVIEWED_FULL_SHA"
 )
 ```
 

@@ -111,8 +111,6 @@ set -eo pipefail
 mkdir -p ~/rosmaster_physical_ws/src
 cd ~/rosmaster_physical_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
-# Current pre-merge x3-c recovery: select the reviewed platform branch using
-# physical_rosmaster/docs/robot_side_next_moves.md before importing dependencies.
 
 cd ~/rosmaster_physical_ws
 vcs import src < src/physical_rosmaster/physical_rosmaster.repos
@@ -133,12 +131,13 @@ must contain exactly the eight repository packages plus `astra_camera` and
 `astra_camera_msgs`. Do not replace the pin without repeating camera contract
 validation.
 
-The clone command above describes the eventual canonical setup from `main`.
-Until the simulator-parity work is merged, the current `x3-c` recovery must
-instead deploy one published `platform/simulator-parity` head whose exact full
-SHA has been reviewed and that contains both runtime commit `a08b097` and
-workstation-validation commit `bc965a6`; follow
-[the ordered recovery runbook](docs/robot_side_next_moves.md).
+The clone command above is the canonical setup from `main`, which merged the
+simulator-parity work (including runtime commit `a08b097` and
+workstation-validation commit `bc965a6`) on 2026-09-03. It supersedes the
+`platform/simulator-parity`-branch, SHA-pinned recovery procedure that
+[the ordered recovery runbook](docs/robot_side_next_moves.md) used to get
+`x3-c` through that merge; that runbook is now a historical record, not a
+setup path to repeat for another robot.
 
 Focused hardware-free checks:
 

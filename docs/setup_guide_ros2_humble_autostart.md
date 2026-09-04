@@ -50,20 +50,16 @@ mkdir -p /root/yahboomcar_ws/src
 cd /root/yahboomcar_ws/src
 git clone https://github.com/AIRclub-UdeSA/physical_rosmaster.git
 
-# Current pre-merge x3-c recovery only: replace the marker with the reviewed
-# full SHA before running these checks.
 cd physical_rosmaster
 git fetch origin
-git checkout platform/simulator-parity
+git checkout main
 git pull --ff-only
 test -z "$(git status --porcelain)"
-test "$(git rev-parse HEAD)" = \
-  "$(git rev-parse origin/platform/simulator-parity)"
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 git merge-base --is-ancestor \
   a08b097b22781ca500fd61c01164a4e7167b3873 HEAD
 git merge-base --is-ancestor \
   bc965a6f5ccdafb01efd3a1a6a230e9d3bbd8e80 HEAD
-test "$(git rev-parse HEAD)" = "REPLACE_WITH_REVIEWED_FULL_SHA"
 
 cd ..
 vcs import . < physical_rosmaster/physical_rosmaster.repos
@@ -81,12 +77,13 @@ rosdep install --from-paths src --ignore-src -r -y
 The manifest pins `ros2_astra_camera`. Do not build an arbitrary current
 camera-driver branch.
 
-The default clone is the canonical new-robot path after this architecture is
-merged to `main`. Until then, do not deploy current `main` to `x3-c`; use
-[the ordered recovery runbook](robot_side_next_moves.md) to select one exact,
-published `platform/simulator-parity` head whose reviewed full SHA contains both
-runtime commit `a08b097` and workstation-validation commit `bc965a6` before
-importing dependencies or building.
+The default clone above is the canonical new-robot path: this architecture
+merged to `main` on 2026-09-03, and `main` contains both runtime commit
+`a08b097` and workstation-validation commit `bc965a6`. The
+`platform/simulator-parity`-branch, SHA-pinned procedure in
+[the ordered recovery runbook](robot_side_next_moves.md) was how `x3-c` got
+through that merge; it is a historical record, not a path to repeat for
+another robot.
 
 Verify the robot-provided motor library with the fail-closed preflight:
 
