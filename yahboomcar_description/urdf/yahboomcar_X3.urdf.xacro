@@ -14,10 +14,11 @@
   <material name="wheel_grey"><color rgba="0.25 0.25 0.25 1.0"/></material>
   <material name="sensor_grey"><color rgba="0.65 0.65 0.65 1.0"/></material>
 
-  <xacro:macro name="mesh_link" params="name mesh material mass:=0.01">
+  <xacro:macro name="mesh_link" params="name mesh material mass:=0.01 visual_mesh:=''">
+    <xacro:property name="effective_visual_mesh" value="${visual_mesh if visual_mesh else mesh}"/>
     <link name="${prefix}${name}">
       <visual>
-        <geometry><mesh filename="package://yahboomcar_description/meshes/${mesh}"/></geometry>
+        <geometry><mesh filename="package://yahboomcar_description/meshes/${effective_visual_mesh}"/></geometry>
         <material name="${material}"/>
       </visual>
       <collision>
@@ -38,8 +39,8 @@
     </joint>
   </xacro:macro>
 
-  <xacro:macro name="wheel" params="position side xyz rpy mesh">
-    <xacro:mesh_link name="${position}_${side}_wheel" mesh="${mesh}" material="wheel_grey" mass="0.0515"/>
+  <xacro:macro name="wheel" params="position side xyz rpy mesh visual_mesh:=''">
+    <xacro:mesh_link name="${position}_${side}_wheel" mesh="${mesh}" material="wheel_grey" mass="0.0515" visual_mesh="${visual_mesh}"/>
     <joint name="${prefix}${position}_${side}_wheel_joint" type="continuous">
       <parent link="${prefix}base_link"/>
       <child link="${prefix}${position}_${side}_wheel"/>
@@ -50,28 +51,35 @@
   </xacro:macro>
 
   <link name="${prefix}base_footprint"/>
-  <xacro:mesh_link name="base_link" mesh="base_link_X3.STL" material="platform_green" mass="0.486"/>
+  <xacro:mesh_link name="base_link" mesh="base_link_X3.STL" material="platform_green" mass="0.486"
+                   visual_mesh="cad_visual/rosmaster_base.obj"/>
   <xacro:fixed_joint name="base_joint" parent="base_footprint" child="base_link"
                      xyz="0 0 0.0815" rpy="0 0 0"/>
 
   <xacro:wheel position="front" side="left" xyz="0.08 0.084492 -0.0389"
-               rpy="${pi/2} 0 0" mesh="front_left_wheel_X3.STL"/>
+               rpy="${pi/2} 0 0" mesh="front_left_wheel_X3.STL"
+               visual_mesh="cad_visual/front_left_wheel.obj"/>
   <xacro:wheel position="front" side="right" xyz="0.08 -0.0845 -0.0389"
-               rpy="-${pi/2} 0 ${pi}" mesh="front_right_wheel_X3.STL"/>
+               rpy="-${pi/2} 0 ${pi}" mesh="front_right_wheel_X3.STL"
+               visual_mesh="cad_visual/front_right_wheel.obj"/>
   <xacro:wheel position="back" side="left" xyz="-0.08 0.084492 -0.03954"
-               rpy="${pi/2} 0 0" mesh="back_left_wheel_X3.STL"/>
+               rpy="${pi/2} 0 0" mesh="back_left_wheel_X3.STL"
+               visual_mesh="cad_visual/back_left_wheel.obj"/>
   <xacro:wheel position="back" side="right" xyz="-0.08 -0.0845 -0.03946"
-               rpy="-${pi/2} 0 ${pi}" mesh="back_right_wheel_X3.STL"/>
+               rpy="-${pi/2} 0 ${pi}" mesh="back_right_wheel_X3.STL"
+               visual_mesh="cad_visual/back_right_wheel.obj"/>
 
   <link name="${prefix}imu_link"/>
   <xacro:fixed_joint name="imu_joint" parent="base_link" child="imu_link"
                      xyz="-0.06 0.01 0.01" rpy="0 ${pi} ${pi/2}"/>
 
-  <xacro:mesh_link name="laser_link" mesh="laser_link.STL" material="sensor_grey" mass="0.048"/>
+  <xacro:mesh_link name="laser_link" mesh="laser_link.STL" material="sensor_grey" mass="0.048"
+                   visual_mesh="cad_visual/lidar.obj"/>
   <xacro:fixed_joint name="laser_joint" parent="base_link" child="laser_link"
                      xyz="0.0435 0.0000526 0.11" rpy="0 0 ${pi}"/>
 
-  <xacro:mesh_link name="cam_1_link" mesh="camera_link.STL" material="sensor_grey" mass="0.01"/>
+  <xacro:mesh_link name="cam_1_link" mesh="camera_link.STL" material="sensor_grey" mass="0.01"
+                   visual_mesh="cad_visual/camera.obj"/>
   <xacro:fixed_joint name="camera_mount_joint" parent="base_link" child="cam_1_link"
                      xyz="0.057105 0.000017948 0.03755" rpy="0 0 0"/>
 </robot>
