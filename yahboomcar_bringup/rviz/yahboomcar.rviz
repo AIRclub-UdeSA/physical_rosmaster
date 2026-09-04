@@ -18,7 +18,18 @@ Visualization Manager:
       Name: RobotModel
       Value: true
     - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frames:
+        All Enabled: false
+        odom:
+          Value: true
+      Marker Scale: 1
       Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: false
+      Tree: {}
+      Update Interval: 0
       Value: true
     - Class: rviz_default_plugins/LaserScan
       Enabled: true
@@ -33,6 +44,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Odometry
       Enabled: true
+      Keep: 1
       Name: Odometry
       Topic:
         Depth: 5
@@ -51,18 +63,6 @@ Visualization Manager:
         Reliability Policy: Best Effort
         Value: /cam_1/color/image_raw
       Value: true
-    - Class: rviz_default_plugins/PointCloud2
-      Enabled: false
-      Name: Depth Cloud
-      Size (Pixels): 3
-      Style: Flat Squares
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /cam_1/depth/color/points
-      Value: false
   Global Options:
     Fixed Frame: odom
     Frame Rate: 30
