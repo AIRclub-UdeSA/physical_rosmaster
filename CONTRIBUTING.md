@@ -87,10 +87,6 @@ imports it. That is a compatibility/version gate, not supply-chain attestation.
   motion acceptance. Use [Rollout status](README.md#rollout-status),
   [the robot checklist](docs/robot_side_verification_todo.md), and
   [odometry validation](docs/odometry_validation.md).
-- **Clean up licensing.** Several package manifests still have
-  improved metadata, but the repository-wide Yahboom/Slamtec provenance and
-  licensing audit is incomplete. See
-  [Provenance and licensing](README.md#provenance-and-licensing).
 - **Fix bugs.** `docs/troubleshooting/README.md` is an incident-driven index
   of known robot failure modes.
 

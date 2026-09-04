@@ -343,4 +343,25 @@ rather than a blocker.
 
 ## Provenance and licensing
 
-This tree includes Yahboom-derived code and the BSD-licensed Slamtec driver. Package-level metadata has been improved for maintained AIRclub packages, but that does not replace a complete repository-wide provenance review.
+Two licenses apply in this tree, both declared in each package's own `package.xml` and matched by a [root `LICENSE`](LICENSE) file:
+
+- **Apache-2.0** for the seven AIRclub-maintained packages — `yahboomcar_bringup`, `yahboomcar_base_node`, `yahboomcar_description`, `yahboomcar_ctrl`, `yahboomcar_astra`, `yahboomcar_visual`, `laserscan_to_point_pulisher`. All are Yahboom-derived in origin (the platform started from Yahboom's ROSMASTER X3 stack) but have been substantially rewritten under the safety and contract boundaries in [`context.md`](context.md); none still carry Yahboom's original placeholder metadata.
+- **BSD** for the vendored `sllidar_ros2` (Slamtec's own driver, imported with its upstream license intact — see [`sllidar_ros2/LICENSE`](sllidar_ros2/LICENSE)). This package is carried close to upstream, not rewritten like the seven above.
+
+### Retired Yahboom packages
+
+The original Yahboom source tree shipped 22 packages; 8 are retained (above). The other 14 were dropped during the platform-contract cleanup and are recoverable only from Git history at tag `pre-platform-contract-cleanup`, never from a hidden local copy. Every one of them still carried Yahboom's unmodified `TODO: License declaration` / `TODO: Package description` placeholders at the point of removal — none were adapted by AIRclub, so removing them removes any AIRclub licensing exposure for that code. The decision for all fourteen is the same: **retired**, not maintained, not shipped, recoverable only for historical reference.
+
+| Package | Why it was out of scope |
+|---|---|
+| `yahboomcar_nav`, `yahboomcar_slam` | Navigation/SLAM — excluded by the non-negotiable boundary in `context.md` |
+| `robot_pose_publisher`, `robot_pose_publisher_ros2` | Pose estimation for a navigation/localization stack this platform doesn't provide |
+| `yahboomcar_KCFTracker` | Visual object tracking — autonomous behavior, not a platform driver |
+| `yahboomcar_linefollow`, `yahboomcar_point` | Autonomous line-following / point-to-point driving — publishes `/cmd_vel`, which default bringup must never do |
+| `yahboomcar_voice_ctrl`, `yahboomcar_mediapipe` | Voice/gesture command interfaces — application behavior, not platform I/O |
+| `yahboom_app_save_map`, `yahboom_web_savmap_interfaces` | Map-saving web UI integration — depends on the mapping stack this platform doesn't provide |
+| `yahboomcar_laser` | Superseded here by `sllidar_ros2` + `laserscan_to_point_pulisher` |
+| `yahboomcar_msgs` | Custom messages consumed only by the removed packages above |
+| `yahboomcar_description_x1` | URDF for the X1 robot model — this repository targets X3 only |
+
+This is a repository-wide provenance review, not just improved per-package metadata: every current and historical package's license, origin, and disposition is accounted for above.
