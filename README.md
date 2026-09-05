@@ -303,6 +303,7 @@ Two licenses apply in this tree, both declared in each package's own `package.xm
 
 - **Apache-2.0** for the seven AIRclub-maintained packages — `yahboomcar_bringup`, `yahboomcar_base_node`, `yahboomcar_description`, `yahboomcar_ctrl`, `yahboomcar_astra`, `yahboomcar_visual`, `laserscan_to_point_pulisher`. All are Yahboom-derived in origin (the platform started from Yahboom's ROSMASTER X3 stack) but have been substantially rewritten under the safety and contract boundaries in [`context.md`](context.md); none still carry Yahboom's original placeholder metadata.
 - **BSD** for the vendored `sllidar_ros2` (Slamtec's own driver, imported with its upstream license intact — see [`sllidar_ros2/LICENSE`](sllidar_ros2/LICENSE)). This package is carried close to upstream, not rewritten like the seven above.
+- **BSD-3-Clause** for `yahboomcar_description/meshes/cad_visual/` — the textured CAD visual meshes, copied as-is from [`yahboom_rosmaster`](https://github.com/AIRclub-UdeSA/yahboom_rosmaster) (itself BSD-3-Clause) so RViz shows the same robot model on the simulator and the physical robot. Collision geometry keeps the original STL set; only the `<visual>` mesh changed.
 
 ### Retired Yahboom packages
 
