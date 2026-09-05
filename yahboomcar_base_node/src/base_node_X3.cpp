@@ -37,7 +37,7 @@ public:
   OdomPublisher()
   : Node("base_node")
   {
-    this->declare_parameter<double>("wheel_radius", 0.033);
+    this->declare_parameter<double>("wheel_radius", 0.0325);
     this->declare_parameter<double>("wheelbase_x", 0.160);
     this->declare_parameter<double>("wheelbase_y", 0.170);
     this->declare_parameter<std::string>("odom_frame", "odom");
