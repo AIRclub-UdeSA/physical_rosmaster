@@ -61,10 +61,10 @@
   <xacro:fixed_joint name="base_joint" parent="base_footprint" child="base_link"
                      xyz="0 0 ${front_wheel_drop + wheel_radius}" rpy="0 0 0"/>
 
-  <xacro:wheel position="front" side="left" xyz="0.08 0.084492 -0.0389"
+  <xacro:wheel position="front" side="left" xyz="0.08 0.084492 ${-front_wheel_drop}"
                rpy="${pi/2} 0 0" mesh="front_left_wheel_X3.STL"
                visual_mesh="cad_visual/front_left_wheel.obj" visual_rpy="${-pi/2} 0 0"/>
-  <xacro:wheel position="front" side="right" xyz="0.08 -0.0845 -0.0389"
+  <xacro:wheel position="front" side="right" xyz="0.08 -0.0845 ${-front_wheel_drop}"
                rpy="-${pi/2} 0 ${pi}" mesh="front_right_wheel_X3.STL"
                visual_mesh="cad_visual/front_right_wheel.obj" visual_rpy="${-pi/2} 0 ${-pi}"/>
   <xacro:wheel position="back" side="left" xyz="-0.08 0.084492 -0.03954"

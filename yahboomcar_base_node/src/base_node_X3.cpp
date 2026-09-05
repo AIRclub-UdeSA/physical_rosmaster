@@ -375,7 +375,7 @@ private:
   rclcpp::TimerBase::SharedPtr diagnostic_timer_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
-  yahboomcar_base_node::MecanumParams mecanum_params_{0.033, 0.080, 0.085};
+  yahboomcar_base_node::MecanumParams mecanum_params_{0.0325, 0.080, 0.085};
   yahboomcar_base_node::OdomCovariances covariances_{
     0.001, 0.001, 0.001, 0.0001, 0.0001, 0.0001};
   double linear_scale_x_ = 1.0;
