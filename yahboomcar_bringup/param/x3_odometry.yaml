@@ -1,6 +1,6 @@
 base_node:
   ros__parameters:
-    wheel_radius: 0.033
+    wheel_radius: 0.0325
     wheelbase_x: 0.160
     wheelbase_y: 0.170
     odom_frame: odom

@@ -37,7 +37,7 @@ public:
   OdomPublisher()
   : Node("base_node")
   {
-    this->declare_parameter<double>("wheel_radius", 0.033);
+    this->declare_parameter<double>("wheel_radius", 0.0325);
     this->declare_parameter<double>("wheelbase_x", 0.160);
     this->declare_parameter<double>("wheelbase_y", 0.170);
     this->declare_parameter<std::string>("odom_frame", "odom");
@@ -375,7 +375,7 @@ private:
   rclcpp::TimerBase::SharedPtr diagnostic_timer_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
-  yahboomcar_base_node::MecanumParams mecanum_params_{0.033, 0.080, 0.085};
+  yahboomcar_base_node::MecanumParams mecanum_params_{0.0325, 0.080, 0.085};
   yahboomcar_base_node::OdomCovariances covariances_{
     0.001, 0.001, 0.001, 0.0001, 0.0001, 0.0001};
   double linear_scale_x_ = 1.0;

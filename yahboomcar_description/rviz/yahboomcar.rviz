@@ -21,7 +21,7 @@ Visualization Manager:
       Name: TF
       Value: true
   Global Options:
-    Fixed Frame: base_link
+    Fixed Frame: base_footprint
     Frame Rate: 30
   Name: root
   Tools:
