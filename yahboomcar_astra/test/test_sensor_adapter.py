@@ -65,3 +65,81 @@ def test_transform_cloud_changes_xyz_and_preserves_rgb_bytes():
     assert output.header.frame_id == 'target_frame'
     assert (x, y, z) == (11.0, 22.0, 33.0)
     assert bytes(output.data[12:16]) == bytes((4, 5, 6, 7))
+
+
+def _orbbec_shaped_cloud(points):
+    """Build a cloud with the driver's 32-byte stride and rgb at offset 16."""
+    message = PointCloud2(
+        height=1, width=len(points), point_step=32, row_step=32 * len(points)
+    )
+    message.header.frame_id = 'cam_1_color_optical_frame'
+    message.is_dense = False
+    message.fields = [
+        PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+        PointField(name='rgb', offset=16, datatype=PointField.FLOAT32, count=1),
+    ]
+    buffer = bytearray(32 * len(points))
+    for index, (xyz, colour) in enumerate(points):
+        struct.pack_into('<fff', buffer, index * 32, *xyz)
+        buffer[index * 32 + 16:index * 32 + 20] = colour
+    message.data = bytes(buffer)
+    return message
+
+
+def test_transform_cloud_packs_out_the_drivers_point_padding():
+    message = _orbbec_shaped_cloud([((1.0, 2.0, 3.0), bytes((4, 5, 6, 7)))])
+
+    output = transform_cloud(
+        message, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), 'cam_1_depth_frame'
+    )
+
+    assert output.point_step == 16
+    assert output.row_step == 16
+    assert len(output.data) == len(message.data) // 2
+    assert [(field.name, field.offset) for field in output.fields] == [
+        ('x', 0), ('y', 4), ('z', 8), ('rgb', 12)
+    ]
+    assert bytes(output.data[12:16]) == bytes((4, 5, 6, 7))
+
+
+def test_transform_cloud_repack_keeps_values_and_invalid_points():
+    message = _orbbec_shaped_cloud(
+        [
+            ((1.0, 2.0, 3.0), bytes((1, 2, 3, 4))),
+            ((math.nan, math.nan, math.nan), bytes((9, 8, 7, 6))),
+        ]
+    )
+
+    output = transform_cloud(
+        message, (10.0, 20.0, 30.0), (0.0, 0.0, 0.0, 1.0), 'cam_1_depth_frame'
+    )
+
+    assert struct.unpack_from('<fff', output.data, 0) == (11.0, 22.0, 33.0)
+    # A dropped depth pixel must stay dropped rather than land at the origin.
+    assert all(math.isnan(value) for value in struct.unpack_from('<fff', output.data, 16))
+    assert bytes(output.data[28:32]) == bytes((9, 8, 7, 6))
+
+
+def test_transform_cloud_does_not_mutate_the_incoming_message():
+    message = _orbbec_shaped_cloud([((1.0, 2.0, 3.0), bytes((4, 5, 6, 7)))])
+    original = bytes(message.data)
+
+    transform_cloud(message, (5.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), 'cam_1_depth_frame')
+
+    assert message.header.frame_id == 'cam_1_color_optical_frame'
+    assert bytes(message.data) == original
+
+
+def test_transform_cloud_rejects_an_rgb_field_it_cannot_pack():
+    message = _orbbec_shaped_cloud([((1.0, 2.0, 3.0), bytes((4, 5, 6, 7)))])
+    message.fields[3].datatype = PointField.UINT8
+
+    try:
+        transform_cloud(
+            message, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), 'cam_1_depth_frame'
+        )
+    except ValueError:
+        return
+    raise AssertionError('an unpackable rgb field must be reported, not dropped')
