@@ -1,0 +1,274 @@
+{
+  "measurement": {
+    "content_samples": 3,
+    "dropout_factor": 2.5,
+    "duration_s": 6.0,
+    "host": "yahboom",
+    "mode": "concurrent",
+    "started_utc": "2026-09-17T15:31:24Z",
+    "topics": [
+      "/odom"
+    ]
+  },
+  "topics": [
+    {
+      "dropouts": {
+        "count": 0,
+        "estimated_missed_messages": 0,
+        "threshold_ms": 249.97779250043095,
+        "worst_gap_ms": null
+      },
+      "latency_ms": {
+        "count": 60,
+        "max": 8.632898330688477,
+        "mean": 2.644463380177816,
+        "median": 2.232193946838379,
+        "min": 1.432657241821289,
+        "p95": 4.240679740905762,
+        "p99": 6.203157901763902,
+        "stddev": 1.2101729504679672
+      },
+      "latency_note": "receive clock minus header.stamp; valid only when measured on the publishing host or against a synchronized clock",
+      "message_count": 60,
+      "observed_duration_s": 6.0,
+      "period_ms": {
+        "count": 59,
+        "max": 104.75341500023205,
+        "mean": 99.99676589831,
+        "median": 99.99111700017238,
+        "min": 93.20119499989232,
+        "p95": 102.73748889981107,
+        "p99": 103.96791462003421,
+        "stddev": 1.8683851305204642
+      },
+      "publisher_count": 1,
+      "publisher_qos": [
+        {
+          "depth": 0,
+          "durability": "VOLATILE",
+          "history": "UNKNOWN",
+          "namespace": "/",
+          "node": "base_node",
+          "reliability": "RELIABLE"
+        }
+      ],
+      "rate_hz": 10.000323420628751,
+      "series": {
+        "pose_x": {
+          "count": 60,
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "stddev": 0.0
+        },
+        "pose_y": {
+          "count": 60,
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "stddev": 0.0
+        },
+        "twist_x": {
+          "count": 60,
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "stddev": 0.0
+        },
+        "twist_y": {
+          "count": 60,
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "stddev": 0.0
+        },
+        "twist_yaw": {
+          "count": 60,
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "stddev": 0.0
+        }
+      },
+      "topic": "/odom",
+      "type": "Odometry"
+    }
+  ],
+  "transforms": {
+    "base_footprint": {
+      "child": "base_footprint",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.0,
+        0.0,
+        -0.07139999999999999
+      ]
+    },
+    "cam_1_color_frame": {
+      "child": "cam_1_color_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.0001723799182253888,
+        0.0023482348334273573,
+        0.0017875793524016945,
+        0.9999956303096478
+      ],
+      "rpy_deg": [
+        -0.019272394263892555,
+        0.2691230148436014,
+        0.20479691968536276
+      ],
+      "xyz_m": [
+        0.05493661330223084,
+        0.02509356483654785,
+        0.037410217243433
+      ]
+    },
+    "cam_1_color_optical_frame": {
+      "child": "cam_1_color_optical_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.5021519122068511,
+        -0.5001919529362241,
+        0.4980160980210221,
+        -0.4996312974551984
+      ],
+      "rpy_deg": [
+        -90.26912303006803,
+        -0.01927218166484005,
+        -89.79511255661438
+      ],
+      "xyz_m": [
+        0.05493661330223084,
+        0.02509356483654785,
+        0.037410217243433
+      ]
+    },
+    "cam_1_depth_frame": {
+      "child": "cam_1_depth_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "cam_1_depth_optical_frame": {
+      "child": "cam_1_depth_optical_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.5,
+        0.4999999999999999,
+        -0.5,
+        0.5000000000000001
+      ],
+      "rpy_deg": [
+        -89.99999999999999,
+        0.0,
+        -89.99999999999999
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "cam_1_link": {
+      "child": "cam_1_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "imu_link": {
+      "child": "imu_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.7071067811865475,
+        0.7071067811865476,
+        4.329780281177466e-17,
+        4.329780281177467e-17
+      ],
+      "rpy_deg": [
+        180.0,
+        7.016709298534876e-15,
+        -90.00000000000001
+      ],
+      "xyz_m": [
+        -0.06,
+        0.01,
+        0.01
+      ]
+    },
+    "laser_link": {
+      "child": "laser_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        1.0,
+        6.123233995736766e-17
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "xyz_m": [
+        0.0435,
+        5.26e-05,
+        0.11
+      ]
+    }
+  }
+}
