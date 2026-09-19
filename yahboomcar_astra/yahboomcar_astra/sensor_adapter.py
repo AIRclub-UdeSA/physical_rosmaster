@@ -27,8 +27,20 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo, Image, PointCloud2
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField
 from tf2_ros import Buffer, TransformException, TransformListener
+
+
+_FIELD_BYTES = {
+    PointField.INT8: 1,
+    PointField.UINT8: 1,
+    PointField.INT16: 2,
+    PointField.UINT16: 2,
+    PointField.INT32: 4,
+    PointField.UINT32: 4,
+    PointField.FLOAT32: 4,
+    PointField.FLOAT64: 8,
+}
 
 
 def metric_depth(message: Image, scale: float) -> Image:
@@ -124,16 +136,26 @@ def transform_cloud(
     target_frame: str,
 ) -> PointCloud2:
     """
-    Transform a callback-owned cloud in place, preserving RGB and layout.
+    Return the cloud rotated into ``target_frame``, tightly packed.
 
-    ROS 2's generated Python setter validates every byte assigned to a uint8
-    sequence.  A 640x480 XYZRGB cloud is several megabytes, so copying the
-    transformed buffer into a second ``PointCloud2`` can starve every other
-    camera callback on the robot.  Subscription callbacks own their message,
-    which makes updating that buffer directly both safe and bounded.
+    The Orbbec driver publishes 32-byte points that carry only 16 bytes of
+    x, y, z and rgb, so half of every cloud is padding -- 1.2 MB of the
+    2.4 MB measured on ``x3-c``.  This topic is the platform's measured
+    bottleneck (see ``docs/sensor_capabilities.md``), and it is slow enough
+    at boot to fail the contract probe's lower bound and suppress the
+    boot-ready signal, so the padding is worth removing rather than
+    forwarding.
+
+    Unlike the other conversions here this one cannot edit the callback's
+    buffer in place, because changing the point stride is the whole point of
+    the pass.  The cost of the extra copy is bounded and local; the bytes it
+    saves are serialized and delivered to every subscriber.  As in
+    ``metric_depth``, the output buffer is filled through the generated array
+    directly, since assigning through the ROS property makes its Python
+    setter validate every byte before doing the same copy.
     """
-    field_offsets = {field.name: field.offset for field in message.fields}
-    if not {"x", "y", "z"}.issubset(field_offsets):
+    fields_by_name = {field.name: field for field in message.fields}
+    if not {"x", "y", "z"}.issubset(fields_by_name):
         raise ValueError("point cloud does not contain x, y, and z fields")
     if message.point_step <= 0 or message.row_step != message.point_step * message.width:
         raise ValueError("point cloud contains unsupported row padding")
@@ -143,19 +165,18 @@ def transform_cloud(
     if len(message.data) < expected_size:
         raise ValueError("truncated point cloud")
 
-    mutable_data = message.data
+    source = message.data
     byte_order = ">" if message.is_bigendian else "<"
-    coordinates = []
-    for field_name in ("x", "y", "z"):
-        coordinates.append(
-            np.ndarray(
-                shape=(point_count,),
-                dtype=byte_order + "f4",
-                buffer=mutable_data,
-                offset=field_offsets[field_name],
-                strides=(message.point_step,),
-            )
+    coordinates = [
+        np.ndarray(
+            shape=(point_count,),
+            dtype=byte_order + "f4",
+            buffer=source,
+            offset=fields_by_name[name].offset,
+            strides=(message.point_step,),
         )
+        for name in ("x", "y", "z")
+    ]
 
     xyz = np.column_stack(coordinates).astype(np.float64, copy=False)
     finite = np.all(np.isfinite(xyz), axis=1)
@@ -165,11 +186,48 @@ def transform_cloud(
         if offset.shape != (3,) or not np.all(np.isfinite(offset)):
             raise ValueError("invalid transform translation")
         xyz[finite] = xyz[finite] @ rotation.T + offset
-        for axis, values in zip(coordinates, xyz.T):
-            axis[finite] = values[finite].astype(np.float32)
 
-    message.header.frame_id = target_frame
-    return message
+    # Colour is copied as raw bytes rather than reinterpreted, so whatever
+    # packing the driver chose survives untouched.  That is only safe while
+    # the field really is the four bytes the packed layout reserves for it.
+    colour = fields_by_name.get("rgb")
+    if colour is not None and (
+        _FIELD_BYTES.get(colour.datatype) != 4 or colour.count != 1
+    ):
+        raise ValueError("point cloud rgb field is not a single four-byte value")
+    packed_step = 12 if colour is None else 16
+
+    packed = np.empty((point_count, packed_step), dtype=np.uint8)
+    packed[:, 0:12] = np.ascontiguousarray(xyz, dtype="<f4").view(np.uint8)
+    if colour is not None:
+        packed[:, 12:16] = np.ndarray(
+            shape=(point_count, 4),
+            dtype=np.uint8,
+            buffer=source,
+            offset=colour.offset,
+            strides=(message.point_step, 1),
+        )
+
+    output = PointCloud2()
+    output.header.stamp = message.header.stamp
+    output.header.frame_id = target_frame
+    output.height = message.height
+    output.width = message.width
+    output.is_dense = message.is_dense
+    output.is_bigendian = False
+    output.point_step = packed_step
+    output.row_step = packed_step * message.width
+    output.fields = [
+        PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+    ]
+    if colour is not None:
+        output.fields.append(
+            PointField(name="rgb", offset=12, datatype=colour.datatype, count=1)
+        )
+    output.data.frombytes(packed.tobytes())
+    return output
 
 
 class AstraSensorAdapter(Node):
