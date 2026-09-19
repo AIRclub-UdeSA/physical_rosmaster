@@ -1,0 +1,388 @@
+{
+  "measurement": {
+    "content_samples": 1,
+    "dropout_factor": 2.5,
+    "duration_s": 30.0,
+    "host": "yahboom",
+    "mode": "concurrent",
+    "started_utc": "2026-09-17T15:09:47Z",
+    "topics": [
+      "/_hardware/astra/depth/color/points",
+      "/cam_1/depth/color/points"
+    ]
+  },
+  "topics": [
+    {
+      "content": {
+        "declared_points": 76800,
+        "extent_m": {
+          "x": [
+            -2.1669070720672607,
+            2.7101306915283203
+          ],
+          "y": [
+            -2.236384153366089,
+            0.3597263693809509
+          ],
+          "z": [
+            1.380000114440918,
+            6.135000228881836
+          ]
+        },
+        "field_names": [
+          "x",
+          "y",
+          "z",
+          "rgb"
+        ],
+        "fields": [
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "x",
+            "offset": 0
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "y",
+            "offset": 4
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "z",
+            "offset": 8
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "rgb",
+            "offset": 16
+          }
+        ],
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "is_bigendian": false,
+        "is_dense": false,
+        "payload_bytes": 2457600,
+        "point_step": 32,
+        "row_step": 10240,
+        "valid_fraction": 0.3858984375,
+        "valid_points": 29637,
+        "width": 320
+      },
+      "content_samples": 1,
+      "dropouts": {
+        "count": 112,
+        "estimated_missed_messages": 449,
+        "threshold_ms": 95.82288250015836,
+        "worst_gap_ms": 566.6487990000633
+      },
+      "latency_ms": {
+        "count": 328,
+        "max": 37.985801696777344,
+        "mean": 33.215790260128855,
+        "median": 33.40160846710205,
+        "min": 27.46129035949707,
+        "p95": 36.904001235961914,
+        "p99": 37.51200914382935,
+        "stddev": 2.346091063925914
+      },
+      "latency_note": "receive clock minus header.stamp; valid only when measured on the publishing host or against a synchronized clock",
+      "message_count": 328,
+      "observed_duration_s": 30.0,
+      "period_ms": {
+        "count": 327,
+        "max": 566.6487990000633,
+        "mean": 91.52945442813457,
+        "median": 38.32915300006334,
+        "min": 28.39512499997454,
+        "p95": 268.28829490000317,
+        "p99": 489.6742392399622,
+        "stddev": 95.71661952751094
+      },
+      "publisher_count": 1,
+      "publisher_qos": [
+        {
+          "depth": 0,
+          "durability": "VOLATILE",
+          "history": "UNKNOWN",
+          "namespace": "/_hardware/astra",
+          "node": "camera",
+          "reliability": "BEST_EFFORT"
+        }
+      ],
+      "rate_hz": 10.925444778928098,
+      "topic": "/_hardware/astra/depth/color/points",
+      "type": "PointCloud2"
+    },
+    {
+      "content": {
+        "declared_points": 76800,
+        "extent_m": {
+          "x": [
+            1.383154034614563,
+            5.8235979080200195
+          ],
+          "y": [
+            -2.665966749191284,
+            2.1760551929473877
+          ],
+          "z": [
+            -0.3659121096134186,
+            2.2111475467681885
+          ]
+        },
+        "field_names": [
+          "x",
+          "y",
+          "z",
+          "rgb"
+        ],
+        "fields": [
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "x",
+            "offset": 0
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "y",
+            "offset": 4
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "z",
+            "offset": 8
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "rgb",
+            "offset": 16
+          }
+        ],
+        "frame_id": "cam_1_depth_frame",
+        "height": 240,
+        "is_bigendian": false,
+        "is_dense": false,
+        "payload_bytes": 2457600,
+        "point_step": 32,
+        "row_step": 10240,
+        "valid_fraction": 0.3877734375,
+        "valid_points": 29781,
+        "width": 320
+      },
+      "content_samples": 1,
+      "dropouts": {
+        "count": 48,
+        "estimated_missed_messages": 182,
+        "threshold_ms": 170.41720999998233,
+        "worst_gap_ms": 1398.1371449999642
+      },
+      "latency_ms": {
+        "count": 246,
+        "max": 50.92978477478027,
+        "mean": 45.37864623030996,
+        "median": 45.44103145599365,
+        "min": 40.39788246154785,
+        "p95": 48.67333173751831,
+        "p99": 49.99097585678101,
+        "stddev": 2.05815597821688
+      },
+      "latency_note": "receive clock minus header.stamp; valid only when measured on the publishing host or against a synchronized clock",
+      "message_count": 246,
+      "observed_duration_s": 30.0,
+      "period_ms": {
+        "count": 245,
+        "max": 1398.1371449999642,
+        "mean": 121.8798189755103,
+        "median": 68.16688399999293,
+        "min": 28.26044399989769,
+        "p95": 367.21653719996533,
+        "p99": 621.5015428799145,
+        "stddev": 146.11858201500536
+      },
+      "publisher_count": 1,
+      "publisher_qos": [
+        {
+          "depth": 0,
+          "durability": "VOLATILE",
+          "history": "UNKNOWN",
+          "namespace": "/",
+          "node": "astra_sensor_adapter",
+          "reliability": "BEST_EFFORT"
+        }
+      ],
+      "rate_hz": 8.204803784627645,
+      "topic": "/cam_1/depth/color/points",
+      "type": "PointCloud2"
+    }
+  ],
+  "transforms": {
+    "base_footprint": {
+      "child": "base_footprint",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.0,
+        0.0,
+        -0.0815
+      ]
+    },
+    "cam_1_color_frame": {
+      "child": "cam_1_color_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.0001723799182253888,
+        0.0023482348334273573,
+        0.0017875793524016945,
+        0.9999956303096478
+      ],
+      "rpy_deg": [
+        -0.019272394263892555,
+        0.2691230148436014,
+        0.20479691968536276
+      ],
+      "xyz_m": [
+        0.05493661330223084,
+        0.02509356483654785,
+        0.037410217243433
+      ]
+    },
+    "cam_1_color_optical_frame": {
+      "child": "cam_1_color_optical_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.5021519122068511,
+        -0.5001919529362241,
+        0.4980160980210221,
+        -0.4996312974551984
+      ],
+      "rpy_deg": [
+        -90.26912303006803,
+        -0.01927218166484005,
+        -89.79511255661438
+      ],
+      "xyz_m": [
+        0.05493661330223084,
+        0.02509356483654785,
+        0.037410217243433
+      ]
+    },
+    "cam_1_depth_frame": {
+      "child": "cam_1_depth_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "cam_1_depth_optical_frame": {
+      "child": "cam_1_depth_optical_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.5,
+        0.4999999999999999,
+        -0.5,
+        0.5000000000000001
+      ],
+      "rpy_deg": [
+        -89.99999999999999,
+        0.0,
+        -89.99999999999999
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "cam_1_link": {
+      "child": "cam_1_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "imu_link": {
+      "child": "imu_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.7071067811865475,
+        0.7071067811865476,
+        4.329780281177466e-17,
+        4.329780281177467e-17
+      ],
+      "rpy_deg": [
+        180.0,
+        7.016709298534876e-15,
+        -90.00000000000001
+      ],
+      "xyz_m": [
+        -0.06,
+        0.01,
+        0.01
+      ]
+    },
+    "laser_link": {
+      "child": "laser_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        1.0,
+        6.123233995736766e-17
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "xyz_m": [
+        0.0435,
+        5.26e-05,
+        0.11
+      ]
+    }
+  }
+}
