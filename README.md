@@ -293,6 +293,8 @@ rather than a blocker.
 - [docs/workstation_and_robot_workflow.md](docs/workstation_and_robot_workflow.md): workstation/robot responsibilities;
 - [docs/robot_side_verification_todo.md](docs/robot_side_verification_todo.md): mandatory first-robot verification checklist and evidence record;
 - [docs/robot_side_next_moves.md](docs/robot_side_next_moves.md): ordered `x3-c` remediation and acceptance runbook;
+- [docs/sensor_capabilities.md](docs/sensor_capabilities.md): measured sensor rates, latency, and noise;
+- [docs/depth_camera_calibration.md](docs/depth_camera_calibration.md): Astra depth scale, noise, and range limits;
 - [docs/odometry_validation.md](docs/odometry_validation.md): encoder-only odometry validation;
 - [agents/README.md](agents/README.md): index of historical pre-cleanup audit and validation evidence;
 - [docs/troubleshooting/README.md](docs/troubleshooting/README.md): incident history and known issues.

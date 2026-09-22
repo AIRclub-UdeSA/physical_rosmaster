@@ -78,6 +78,11 @@ The 61.5% NaN fraction is the number most likely to surprise a consumer
 written against the simulator: a simulated depth camera returns dense depth,
 this one does not.
 
+Whether a reported metre *is* a metre is a separate question, answered in
+[Astra depth calibration](depth_camera_calibration.md): the camera under-reports
+by about 1.1%, its noise follows `sigma ~= max(0.002, 0.0019 * d^2.36)` metres,
+and it stops working below roughly 0.6 m.
+
 ## Point cloud
 
 `/cam_1/depth/color/points` does not reach its 30 Hz target. Measured across
