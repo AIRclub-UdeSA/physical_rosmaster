@@ -59,6 +59,8 @@ def generate_launch_description():
     motor_port = LaunchConfiguration("motor_serial_port")
     lidar_port = LaunchConfiguration("lidar_serial_port")
     camera_serial = LaunchConfiguration("camera_serial_number")
+    cloud_decimation = LaunchConfiguration("cloud_decimation")
+    cloud_strip_nan = LaunchConfiguration("cloud_strip_nan")
 
     launch_arguments = [
         DeclareLaunchArgument(
@@ -89,6 +91,20 @@ def generate_launch_description():
                 "ROSMASTER_ASTRA_SERIAL", default_value=""
             ),
             description="Stable Astra serial number selected per robot",
+        ),
+        DeclareLaunchArgument(
+            "cloud_decimation",
+            default_value=EnvironmentVariable(
+                "ROSMASTER_CLOUD_DECIMATION", default_value="1"
+            ),
+            description="Point cloud spatial decimation factor (1=none, 2=half)",
+        ),
+        DeclareLaunchArgument(
+            "cloud_strip_nan",
+            default_value=EnvironmentVariable(
+                "ROSMASTER_CLOUD_STRIP_NAN", default_value="true"
+            ),
+            description="Whether to strip non-finite (NaN/Inf) depth returns from the point cloud",
         ),
     ]
 
@@ -155,7 +171,11 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(astra_share, "launch", "astra_platform.launch.py")
         ),
-        launch_arguments={"serial_number": camera_serial}.items(),
+        launch_arguments={
+            "serial_number": camera_serial,
+            "cloud_decimation": cloud_decimation,
+            "cloud_strip_nan": cloud_strip_nan,
+        }.items(),
     )
 
     required_nodes = (
