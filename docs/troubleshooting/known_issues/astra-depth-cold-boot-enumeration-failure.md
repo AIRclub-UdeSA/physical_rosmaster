@@ -2,10 +2,12 @@
 
 ## Status
 
-Confirmed reproducible on `x3-c`, 2026-09-22. Not root-caused to a specific
-internal fault; current mitigation is a physical unplug/replug before each
-session. Escalated from an intermittent nuisance to a reliable every-boot
-failure — see [Root Cause](#root-cause).
+Confirmed reproducible on `x3-c`, 2026-09-22, and reproduced again on the very
+next power-on (2026-09-23) after moving the camera to a different USB port —
+same symptom, different physical port. Not root-caused to a specific internal
+fault; current mitigation is a physical unplug/replug before each session.
+Escalated from an intermittent nuisance to a reliable every-boot failure — see
+[Root Cause](#root-cause).
 
 ## Symptom
 
@@ -27,8 +29,11 @@ every cold boot (Juan, direct observation).
   (`idVendor=05e3, idProduct=0608`, Genesys Logic) fanning out to depth
   (`2bc5:060f`, "ORBBEC Depth Sensor") and RGB (`2bc5:050f`, "USB 2.0
   Camera", Sonix Technology) as separate child ports
-- Host: Raspberry Pi, kernel `6.6.62+rpt-rpi-2712` (Pi 5), physical bus path
-  `1-2` (hub) → `1-2.1` (depth) / `1-2.2` (RGB)
+- Host: Raspberry Pi, kernel `6.6.62+rpt-rpi-2712` (Pi 5). Reproduced on two
+  different physical bus paths: `1-2` (hub) → `1-2.1` (depth) / `1-2.2` (RGB)
+  on 2026-09-22, and again on `3-1` (hub) → its child ports on 2026-09-23
+  after the camera was moved to a different USB port — the specific
+  robot-side port is not a factor
 - `rosmaster-platform.service`'s `ExecStartPre` chain: `rosmaster-disk-guard`,
   then `rosmaster-wait-for-platform` (60s bounded poll, checks container +
   motor + LiDAR + both Astra USB IDs)
@@ -78,19 +83,33 @@ rail (RGB shares the same hub and the same power domain and enumerates
 fine), or a host-side USB/xHCI fault (no controller errors, no disconnects,
 other devices on the same host bus tree unaffected).
 
+Confirmed again on 2026-09-23: the camera was moved to a different physical
+USB port on the host (a different bus entirely, `3-1` instead of `1-2`) and
+the identical failure reproduced on the very next cold boot — depth absent,
+RGB present, `rosmaster-wait-for-platform` timed out the same way. This rules
+out the robot-side port, its cable run, and that specific host USB
+controller/hub as the cause. It does not rule out a connection internal to
+the Astra module itself (e.g. between its internal hub and the depth
+sensor's own board), which would travel with the module regardless of which
+host port it's plugged into.
+
 ## Root Cause
 
-Not established. The depth function's port on the Astra's internal hub does
-not come up during normal cold-boot power sequencing, for reasons not yet
-isolated on this robot. Two competing explanations, not yet distinguished:
+Not established, but narrowed by the 2026-09-23 port-swap test: the cause
+travels with the Astra module itself, not with the robot-side port, cable, or
+host USB controller/hub. Two explanations remain, both internal to the
+module, not yet distinguished:
 
 - A timing/init race internal to the Astra module (the depth stream engine
   takes longer to be ready than the hub's enumeration window allows) — would
-  predict a roughly constant failure rate, which does not match the observed
-  sometimes-to-always progression.
-- A physically degrading connection (a working-loose connector, a flexing
-  cable, contact wear) specific to the depth port's wiring inside the module
-  — consistent with a worsening failure rate over time. Not yet inspected.
+  predict a roughly constant failure rate, which does not obviously match the
+  observed sometimes-to-always progression, though a race condition's odds
+  can also shift with unrelated factors (temperature, wear on the module's
+  own connectors) without becoming deterministic.
+- A physically degrading connection *inside the module* (between its internal
+  hub and the depth sensor's own board — not the external USB connector,
+  which the port swap already excludes) — consistent with a worsening failure
+  rate over time. Not yet inspected; would require opening the module.
 
 ## Fix
 
@@ -124,13 +143,17 @@ sends the boot-ready buzzer/RGB signal.
 - Do not treat this as the same failure mode as the 2026-09-18 hub dropout
   (`docs/troubleshooting/incidents/2026-09-18-x3-c-usb-hub-dropout.md`) —
   different hub, no disconnect signature, different fix.
+- Do not try a different robot-side USB port as a fix — already tried on
+  2026-09-23, no effect. Go straight to the unplug/replug of the camera
+  itself.
 
 ## Prevention or Hardening
 
 Not yet decided — open for the project owner. Options for whenever this is
 prioritized, not a current requirement:
 
-- Physically inspect the Astra's internal USB wiring/connector for wear,
+- Physically inspect the Astra module's *internal* wiring/connector for wear
+  (the 2026-09-23 port swap already excludes the robot-side cable/port),
   matching the sometimes-to-always progression, before assuming this is a
   fixed firmware characteristic.
 - A boot-time retry loop that power-cycles just the Astra (if the hub or host
@@ -143,13 +166,15 @@ prioritized, not a current requirement:
 ## Affected Robot / Incident
 
 - Robot: `x3-c`
-- Workstation-local date: 2026-09-22 (`America/Argentina/Buenos_Aires`)
-- Robot-local date recorded during diagnosis: 2026-09-23 (robot's system
-  timezone is `Asia/Shanghai`)
+- Workstation-local dates: 2026-09-22 (first diagnosis) and 2026-09-23
+  (recurrence after a USB port change) (`America/Argentina/Buenos_Aires`)
+- Robot-local dates recorded during diagnosis: 2026-09-23 both times (robot's
+  system timezone is `Asia/Shanghai`, one calendar day ahead of the
+  workstation at the times recorded)
 - Symptom: `rosmaster-platform.service` fails `ExecStartPre`, no autostart,
   no boot-ready signal
 - Direct cause: Astra depth USB function (`2bc5:060f`) does not enumerate on
-  cold boot
+  cold boot, independent of which robot-side USB port the camera uses
 - Confirmed mitigation: physical unplug/reseat of the camera
 
 ## Related Documentation
