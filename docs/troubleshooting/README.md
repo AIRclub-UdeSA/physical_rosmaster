@@ -35,3 +35,4 @@ Each reusable issue page should cover:
 - [Stale colcon install state after a failed package build](known_issues/stale-colcon-install-state.md)
 - [Hostname resolution warning on the Raspberry Pi host](known_issues/hostname-resolution.md)
 - [Workstation RViz cannot reach the robot (ROS 2 distro mismatch, resolved)](known_issues/workstation-rviz-udp-blocked-university-wifi.md)
+- [Astra depth sensor fails to enumerate on cold boot](known_issues/astra-depth-cold-boot-enumeration-failure.md)
