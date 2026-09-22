@@ -16,5 +16,7 @@ exec docker exec \
   -e ROSMASTER_MOTOR_PORT \
   -e ROSMASTER_LIDAR_PORT \
   -e ROSMASTER_ASTRA_SERIAL \
+  -e ROSMASTER_CLOUD_DECIMATION \
+  -e ROSMASTER_CLOUD_STRIP_NAN \
   "$CONTAINER_NAME" /bin/bash -lc \
   "source /opt/ros/humble/setup.bash && source '$WORKSPACE/install/setup.bash' && exec ros2 launch yahboomcar_bringup yahboomcar_bringup_X3_launch.py"

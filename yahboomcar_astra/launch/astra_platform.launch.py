@@ -27,6 +27,8 @@ def generate_launch_description():
     """Start the Astra driver and fail the enclosing launch if either node exits."""
     serial_number = LaunchConfiguration("serial_number")
     startup_timeout = LaunchConfiguration("startup_timeout")
+    cloud_decimation = LaunchConfiguration("cloud_decimation")
+    cloud_strip_nan = LaunchConfiguration("cloud_strip_nan")
 
     serial_argument = DeclareLaunchArgument(
         "serial_number",
@@ -37,6 +39,16 @@ def generate_launch_description():
         "startup_timeout",
         default_value="20.0",
         description="Seconds allowed for all normalized RGB-D streams to become valid",
+    )
+    decimation_argument = DeclareLaunchArgument(
+        "cloud_decimation",
+        default_value="1",
+        description="Subsampling factor for point cloud (1=full resolution, 2=half resolution)",
+    )
+    strip_nan_argument = DeclareLaunchArgument(
+        "cloud_strip_nan",
+        default_value="true",
+        description="Whether to strip non-finite (NaN/Inf) depth returns from the point cloud",
     )
 
     driver = Node(
@@ -98,7 +110,13 @@ def generate_launch_description():
             {
                 "startup_timeout": ParameterValue(
                     startup_timeout, value_type=float
-                )
+                ),
+                "cloud_decimation": ParameterValue(
+                    cloud_decimation, value_type=int
+                ),
+                "cloud_strip_nan": ParameterValue(
+                    cloud_strip_nan, value_type=bool
+                ),
             }
         ],
     )
@@ -120,5 +138,13 @@ def generate_launch_description():
     ]
 
     return LaunchDescription(
-        [serial_argument, timeout_argument, driver, adapter, *required_handlers]
+        [
+            serial_argument,
+            timeout_argument,
+            decimation_argument,
+            strip_nan_argument,
+            driver,
+            adapter,
+            *required_handlers,
+        ]
     )

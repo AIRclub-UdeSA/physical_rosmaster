@@ -56,3 +56,21 @@ def test_adapter_limits_openblas_workers():
     ]
 
     assert {"OPENBLAS_NUM_THREADS": "1"} in environments
+
+
+def test_launch_declares_cloud_optimization_arguments():
+    """Verify cloud_decimation and cloud_strip_nan arguments are exposed."""
+    from launch.actions import DeclareLaunchArgument
+
+    launch_module = _load_launch_module()
+    context = LaunchContext()
+    arguments = {
+        action.name: perform_substitutions(context, action.default_value)
+        for action in launch_module.generate_launch_description().entities
+        if isinstance(action, DeclareLaunchArgument)
+    }
+
+    assert "cloud_decimation" in arguments
+    assert arguments["cloud_decimation"] == "1"
+    assert "cloud_strip_nan" in arguments
+    assert arguments["cloud_strip_nan"] == "true"
