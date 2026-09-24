@@ -32,13 +32,24 @@ constant clock offset rather than true pipeline latency.
 Measurement load is itself a result. On a Raspberry Pi, subscribing to the
 XYZRGB cloud is not free, so --sequential measures one topic at a time and
 --content-samples bounds heavy per-message parsing. Record which mode
-produced a number before comparing two numbers.
+produced a number before comparing two numbers. For the same reason every
+topic's other subscribers are recorded at the end of its window.
+
+Timing is reported two ways. Arrival gaps (receive clock) describe what a
+subscriber experiences; header-stamp gaps describe what the publisher
+produced. The camera captures on a fixed frame clock, so camera stamp gaps
+are also counted in whole frames, which is how the point cloud loses data.
+For topics the boot gate checks, the gate's own rate statistic from
+physical_contract_probe.py is applied to every window of the capture, so the
+margin against its floor is measured in the gate's terms. --per-message keeps
+the raw per-message columns so a gap model can be fitted afterwards.
 """
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
+import hashlib
 import json
 import math
 import sys
@@ -48,7 +59,9 @@ import rclpy
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from rcl_interfaces.srv import GetParameters
 from rclpy.node import Node
+from rclpy.parameter import parameter_value_to_python
 from rclpy.qos import (
     DurabilityPolicy,
     HistoryPolicy,
@@ -66,6 +79,8 @@ from sensor_msgs.msg import (
 )
 from std_msgs.msg import Float32
 from tf2_ros import Buffer, TransformListener
+
+from physical_contract_probe import DEFAULT_SAMPLES, median_stamp_rate, RATE_LIMITS_HZ
 
 try:
     import numpy as np
@@ -133,6 +148,15 @@ TF_TARGETS = [
 # Messages with no header carry no stamp, so latency is undefined for them.
 UNSTAMPED_TYPES = (Twist, Float32)
 
+# Types whose stamps come from the camera's frame clock, so their gaps are
+# whole multiples of one frame period.
+FRAME_QUANTIZED_TYPES = {"Image", "CameraInfo", "PointCloud2"}
+
+# Adapter settings that change the cloud's shape and cost. They are recorded
+# with every measurement so two numbers are never compared across settings.
+ADAPTER_NODE = "/astra_sensor_adapter"
+ADAPTER_PARAMETERS = ["cloud_strip_nan", "cloud_decimation", "target_cloud_frame"]
+
 
 def percentile(values, fraction):
     """Return a linearly interpolated percentile of an unsorted sequence."""
@@ -177,15 +201,25 @@ def field_of_view(intrinsic, size):
 
 @dataclass
 class TopicRecord:
-    """Accumulated arrival, latency, and content evidence for one topic."""
+    """
+    Accumulated arrival, stamp, and content evidence for one topic.
+
+    ``arrivals``, ``receipts``, ``stamps`` and ``payload_bytes`` hold one entry
+    per received message, in arrival order: the monotonic receive time, the
+    wall-clock receive time, the header stamp (None when there is none), and
+    the payload size (None for types without a bulk payload).
+    """
 
     topic: str
     message_type: str
     arrivals: list = field(default_factory=list)
-    latencies: list = field(default_factory=list)
+    receipts: list = field(default_factory=list)
+    stamps: list = field(default_factory=list)
+    payload_bytes: list = field(default_factory=list)
     content: list = field(default_factory=list)
     series: dict = field(default_factory=dict)
     publisher_qos: list = field(default_factory=list)
+    other_subscribers: list = None
     errors: list = field(default_factory=list)
 
     def add_series(self, name, value):
@@ -193,6 +227,106 @@ class TopicRecord:
         if value is None or not math.isfinite(value):
             return
         self.series.setdefault(name, []).append(value)
+
+
+def payload_size(message):
+    """Return the bulk payload size in bytes, or None for small messages."""
+    if isinstance(message, (Image, PointCloud2)):
+        return len(message.data)
+    return None
+
+
+def frame_cadence(stamp_gaps, frame_rate):
+    """
+    Count header-stamp gaps in whole camera frames.
+
+    A consumer that cannot keep up with the camera loses whole frames, so a
+    gap of three frame periods means two frames were skipped. Gaps that do
+    not land near a frame boundary are counted separately, since they mean
+    the stamps do not follow the frame clock the way this assumes.
+    """
+    if not frame_rate or frame_rate <= 0.0:
+        return None
+    frame_period = 1.0 / frame_rate
+    frames = [gap / frame_period for gap in stamp_gaps if gap > 0.0]
+    if not frames:
+        return None
+    whole = [max(1, int(round(value))) for value in frames]
+    histogram = {}
+    for count in whole:
+        histogram[count] = histogram.get(count, 0) + 1
+    return {
+        "frame_rate_hz": frame_rate,
+        "frames_per_gap": {str(count): histogram[count] for count in sorted(histogram)},
+        "skipped_frames": sum(count - 1 for count in whole),
+        "delivered_fraction": len(whole) / sum(whole),
+        "off_grid_gaps": sum(1 for value in frames if abs(value - round(value)) > 0.25),
+    }
+
+
+def contract_windows(stamps, limits, window=DEFAULT_SAMPLES):
+    """
+    Apply the boot gate's rate statistic to every window of consecutive stamps.
+
+    The gate judges a topic on the first few messages after it subscribes, so
+    its verdict depends on which messages it happens to catch. Sliding its
+    exact statistic across the capture shows how much margin it has.
+    """
+    rates = []
+    for start in range(len(stamps) - window + 1):
+        rate = median_stamp_rate(stamps[start:start + window])
+        if rate is not None:
+            rates.append(rate)
+    if not rates:
+        return None
+    minimum, maximum = limits
+    return {
+        "window_messages": window,
+        "limits_hz": [minimum, maximum],
+        "windows": len(rates),
+        "first_window_hz": rates[0],
+        "min_hz": min(rates),
+        "p05_hz": percentile(rates, 0.05),
+        "median_hz": percentile(rates, 0.5),
+        "windows_outside_limits": sum(
+            1 for rate in rates if not minimum <= rate <= maximum
+        ),
+    }
+
+
+def other_endpoints(endpoints, own_name, own_namespace):
+    """Describe graph endpoints that do not belong to this probe."""
+    return [
+        {"node": endpoint.node_name, "namespace": endpoint.node_namespace}
+        for endpoint in endpoints
+        if (endpoint.node_name, endpoint.node_namespace) != (own_name, own_namespace)
+    ]
+
+
+def git_blob_id(content):
+    """Return the id ``git hash-object`` gives this content."""
+    header = b"blob %d\0" % len(content)
+    return hashlib.sha1(header + content).hexdigest()
+
+
+def host_uptime():
+    """Return seconds since the host booted, or None off Linux."""
+    try:
+        with open("/proc/uptime", encoding="utf-8") as handle:
+            return float(handle.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def parse_notes(entries):
+    """Turn repeated KEY=VALUE arguments into a dictionary."""
+    notes = {}
+    for entry in entries:
+        key, separator, value = entry.partition("=")
+        if not separator or not key.strip():
+            raise SystemExit("--note expects KEY=VALUE, got '%s'" % entry)
+        notes[key.strip()] = value.strip()
+    return notes
 
 
 def image_content(message):
@@ -438,12 +572,17 @@ class SensorCapabilityProbe(Node):
 
         def callback(message):
             arrival = time.monotonic()
-            record.arrivals.append(arrival)
+            receipt = time.time()
+            stamp_seconds = None
             if stamped:
                 stamp = message.header.stamp
-                stamp_seconds = stamp.sec + stamp.nanosec * 1e-9
-                if stamp_seconds > 0.0:
-                    record.latencies.append(time.time() - stamp_seconds)
+                value = stamp.sec + stamp.nanosec * 1e-9
+                if value > 0.0:
+                    stamp_seconds = value
+            record.arrivals.append(arrival)
+            record.receipts.append(receipt)
+            record.stamps.append(stamp_seconds)
+            record.payload_bytes.append(payload_size(message))
             try:
                 record_series(record, message)
                 if len(record.content) < self.content_samples:
@@ -455,6 +594,15 @@ class SensorCapabilityProbe(Node):
                     record.errors.append("%s: %s" % (type(error).__name__, error))
 
         return callback
+
+    def record_other_subscribers(self):
+        """Note who else was subscribed to each topic by the end of the window."""
+        for topic, record in self.records.items():
+            record.other_subscribers = other_endpoints(
+                self.get_subscriptions_info_by_topic(topic),
+                self.get_name(),
+                self.get_namespace(),
+            )
 
     def transforms(self, source="base_link"):
         """Report each sensor mount as translation plus roll, pitch, and yaw."""
@@ -488,6 +636,30 @@ class SensorCapabilityProbe(Node):
         return results
 
 
+def read_parameters(node_name, names, timeout=2.0):
+    """
+    Read parameters from another node, reporting why when it cannot.
+
+    Uses its own short-lived node: spinning the probe itself here would run
+    its subscription callbacks and record messages outside the window.
+    """
+    node = rclpy.create_node("sensor_capability_probe_parameters")
+    client = node.create_client(GetParameters, node_name + "/get_parameters")
+    try:
+        if not client.wait_for_service(timeout_sec=timeout):
+            return {"error": "%s is not running" % node_name}
+        future = client.call_async(GetParameters.Request(names=names))
+        rclpy.spin_until_future_complete(node, future, timeout_sec=timeout)
+        if not future.done() or future.result() is None:
+            return {"error": "no parameter reply from %s" % node_name}
+        return {
+            name: parameter_value_to_python(value)
+            for name, value in zip(names, future.result().values)
+        }
+    finally:
+        node.destroy_node()
+
+
 def quaternion_to_rpy(x, y, z, w):
     """Convert a quaternion to intrinsic roll, pitch, and yaw in radians."""
     sinr_cosp = 2.0 * (w * x + y * z)
@@ -501,7 +673,14 @@ def quaternion_to_rpy(x, y, z, w):
     return roll, pitch, yaw
 
 
-def summarize(record, duration, dropout_factor):
+def summarize(
+    record,
+    duration,
+    dropout_factor,
+    window_start=None,
+    frame_rate=0.0,
+    per_message=False,
+):
     """Turn raw arrivals and samples into the numbers the simulator needs."""
     arrivals = record.arrivals
     summary = {
@@ -512,8 +691,24 @@ def summarize(record, duration, dropout_factor):
         "message_count": len(arrivals),
         "observed_duration_s": duration,
     }
+    if record.other_subscribers is not None:
+        summary["other_subscriber_count"] = len(record.other_subscribers)
+        summary["other_subscribers"] = record.other_subscribers
     if record.errors:
         summary["errors"] = record.errors
+    if per_message and arrivals:
+        origin = arrivals[0] if window_start is None else window_start
+        summary["per_message"] = {
+            "arrival_s": [round(arrival - origin, 6) for arrival in arrivals],
+            "stamp_s": [
+                None if stamp is None else round(stamp, 6) for stamp in record.stamps
+            ],
+            "latency_ms": [
+                None if stamp is None else round((receipt - stamp) * 1000.0, 3)
+                for receipt, stamp in zip(record.receipts, record.stamps)
+            ],
+            "payload_bytes": record.payload_bytes,
+        }
     if len(arrivals) < 2:
         summary["rate_hz"] = None
         summary["note"] = "fewer than two messages observed"
@@ -546,12 +741,35 @@ def summarize(record, duration, dropout_factor):
                 int(round(gap / median_gap)) - 1 for gap in dropouts
             ),
         }
-    if record.latencies:
-        summary["latency_ms"] = describe(record.latencies, scale=1000.0)
+    latencies = [
+        receipt - stamp
+        for receipt, stamp in zip(record.receipts, record.stamps)
+        if stamp is not None
+    ]
+    if latencies:
+        summary["latency_ms"] = describe(latencies, scale=1000.0)
         summary["latency_note"] = (
             "receive clock minus header.stamp; valid only when measured on the "
             "publishing host or against a synchronized clock"
         )
+    stamps = [stamp for stamp in record.stamps if stamp is not None]
+    stamp_gaps = [later - earlier for earlier, later in zip(stamps, stamps[1:])]
+    if stamp_gaps:
+        summary["stamp_period_ms"] = describe(stamp_gaps, scale=1000.0)
+        backwards = sum(1 for gap in stamp_gaps if gap <= 0.0)
+        if backwards:
+            summary["non_increasing_stamps"] = backwards
+        if record.message_type in FRAME_QUANTIZED_TYPES:
+            cadence = frame_cadence(stamp_gaps, frame_rate)
+            if cadence:
+                summary["frame_cadence"] = cadence
+    if record.topic in RATE_LIMITS_HZ:
+        gate = contract_windows(stamps, RATE_LIMITS_HZ[record.topic])
+        if gate:
+            summary["contract_rate_hz"] = gate
+    payloads = [size for size in record.payload_bytes if size is not None]
+    if payloads:
+        summary["payload_bytes"] = describe(payloads)
     if record.series:
         summary["series"] = {
             name: describe(values) for name, values in sorted(record.series.items())
@@ -576,6 +794,17 @@ def format_report(result):
     lines.append("duration        : %.1f s per topic" % meta["duration_s"])
     lines.append("mode            : %s" % meta["mode"])
     lines.append("content samples : %d per topic" % meta["content_samples"])
+    if meta.get("host_uptime_s") is not None:
+        lines.append("host uptime     : %.0f s at start" % meta["host_uptime_s"])
+    if meta.get("adapter_parameters"):
+        lines.append(
+            "adapter         : %s"
+            % ", ".join(
+                "%s=%s" % item for item in sorted(meta["adapter_parameters"].items())
+            )
+        )
+    for key, value in sorted(meta.get("notes", {}).items()):
+        lines.append("note            : %s=%s" % (key, value))
     lines.append("")
     for summary in result["topics"]:
         lines.append("-" * 78)
@@ -629,6 +858,71 @@ def format_report(result):
             lines.append(
                 "  latency  median %.1f ms  p95 %.1f ms  max %.1f ms"
                 % (latency["median"], latency["p95"], latency["max"])
+            )
+        stamp_period = summary.get("stamp_period_ms")
+        if stamp_period:
+            lines.append(
+                "  stamps   period median %.1f ms  p95 %.1f ms  max %.1f ms%s"
+                % (
+                    stamp_period["median"],
+                    stamp_period["p95"],
+                    stamp_period["max"],
+                    "  (%d non-increasing)" % summary["non_increasing_stamps"]
+                    if summary.get("non_increasing_stamps")
+                    else "",
+                )
+            )
+        cadence = summary.get("frame_cadence")
+        if cadence:
+            lines.append(
+                "  frames   %.1f%% of %.0f Hz frames delivered, %d skipped, "
+                "%d off-grid gaps"
+                % (
+                    cadence["delivered_fraction"] * 100.0,
+                    cadence["frame_rate_hz"],
+                    cadence["skipped_frames"],
+                    cadence["off_grid_gaps"],
+                )
+            )
+            lines.append(
+                "           frames per gap: %s"
+                % "  ".join(
+                    "%sx%d" % item for item in cadence["frames_per_gap"].items()
+                )
+            )
+        gate = summary.get("contract_rate_hz")
+        if gate:
+            lines.append(
+                "  gate     %d-message rate: first %.2f  min %.2f  p05 %.2f  "
+                "median %.2f Hz; %d/%d windows outside %.1f..%.1f Hz"
+                % (
+                    gate["window_messages"],
+                    gate["first_window_hz"],
+                    gate["min_hz"],
+                    gate["p05_hz"],
+                    gate["median_hz"],
+                    gate["windows_outside_limits"],
+                    gate["windows"],
+                    gate["limits_hz"][0],
+                    gate["limits_hz"][1],
+                )
+            )
+        payload = summary.get("payload_bytes")
+        if payload:
+            lines.append(
+                "  payload  median %.0f bytes  min %.0f  max %.0f"
+                % (payload["median"], payload["min"], payload["max"])
+            )
+        if "other_subscribers" in summary:
+            lines.append(
+                "  others   %s"
+                % (
+                    ", ".join(
+                        entry["namespace"].rstrip("/") + "/" + entry["node"]
+                        for entry in summary["other_subscribers"]
+                    )
+                    or "none subscribed"
+                )
             )
         content = summary.get("content")
         if content:
@@ -803,11 +1097,22 @@ def resolve_topics(args):
     return ordered
 
 
-def measure(topics, duration, content_samples, dropout_factor, sequential):
+def measure(
+    topics,
+    duration,
+    content_samples,
+    dropout_factor,
+    sequential,
+    frame_rate=0.0,
+    per_message=False,
+    notes=None,
+):
     """Run the probe and return one structured measurement result."""
     import socket
 
     started = time.gmtime()
+    uptime = host_uptime()
+    adapter_parameters = read_parameters(ADAPTER_NODE, ADAPTER_PARAMETERS)
     summaries = []
     transforms = {}
     batches = [[topic] for topic in topics] if sequential else [topics]
@@ -815,26 +1120,46 @@ def measure(topics, duration, content_samples, dropout_factor, sequential):
         probe = SensorCapabilityProbe(batch, content_samples)
         # The TF listener needs the tree before the first lookup, and a fresh
         # subscription needs a moment to match its publisher.
-        deadline = time.monotonic() + duration
+        window_start = time.monotonic()
+        deadline = window_start + duration
         while rclpy.ok() and time.monotonic() < deadline:
             rclpy.spin_once(probe, timeout_sec=0.05)
         observed = duration
+        probe.record_other_subscribers()
         for topic in batch:
             summaries.append(
-                summarize(probe.records[topic], observed, dropout_factor)
+                summarize(
+                    probe.records[topic],
+                    observed,
+                    dropout_factor,
+                    window_start=window_start,
+                    frame_rate=frame_rate,
+                    per_message=per_message,
+                )
             )
         if not transforms:
             transforms = probe.transforms()
         probe.destroy_node()
+    try:
+        with open(__file__, "rb") as handle:
+            probe_blob = git_blob_id(handle.read())
+    except OSError:
+        probe_blob = None
     return {
         "measurement": {
             "host": socket.gethostname(),
             "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", started),
+            "host_uptime_s": uptime,
             "duration_s": duration,
             "mode": "sequential" if sequential else "concurrent",
             "content_samples": content_samples,
             "dropout_factor": dropout_factor,
+            "camera_frame_rate_hz": frame_rate,
+            "per_message": per_message,
             "topics": topics,
+            "adapter_parameters": adapter_parameters,
+            "notes": notes or {},
+            "probe_git_blob": probe_blob,
         },
         "topics": summaries,
         "transforms": transforms,
@@ -881,6 +1206,25 @@ def main():
         action="store_true",
         help="measure one topic at a time so the probe does not load the others",
     )
+    parser.add_argument(
+        "--camera-frame-rate",
+        type=float,
+        default=30.0,
+        help="camera frame clock used to count stamp gaps in whole frames; the "
+        "Astra is configured for 30 Hz in astra_platform.launch.py (0 disables)",
+    )
+    parser.add_argument(
+        "--per-message",
+        action="store_true",
+        help="keep per-message arrival, stamp, latency and size columns in the JSON",
+    )
+    parser.add_argument(
+        "--note",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="condition recorded with the result, e.g. commit=b144d31 (repeatable)",
+    )
     parser.add_argument("--output", help="write the full JSON result to this path")
     args = parser.parse_args()
 
@@ -889,6 +1233,9 @@ def main():
     topics = resolve_topics(args)
     if args.duration <= 0.0 or args.content_samples < 0:
         raise SystemExit("duration must be positive and content samples non-negative")
+    if args.camera_frame_rate < 0.0:
+        raise SystemExit("camera frame rate must not be negative")
+    notes = parse_notes(args.note)
 
     rclpy.init()
     try:
@@ -898,6 +1245,9 @@ def main():
             args.content_samples,
             args.dropout_factor,
             args.sequential,
+            frame_rate=args.camera_frame_rate,
+            per_message=args.per_message,
+            notes=notes,
         )
     finally:
         rclpy.shutdown()
