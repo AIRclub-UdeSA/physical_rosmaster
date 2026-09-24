@@ -31,6 +31,10 @@ Rates below are measured over 30-40 s windows. The probe is itself a
 subscriber, so it perturbs what it measures; this matters only for the point
 cloud, which is called out separately.
 
+The point cloud was re-measured on 2026-09-24, after its pipeline changed, and
+has its own record in [Point cloud](#point-cloud). Its row in the table below
+comes from that session; every other row is from 2026-09-17.
+
 ## Rates and latency
 
 | Topic | Rate (Hz) | Period median / p95 (ms) | Latency median (ms) |
@@ -39,7 +43,7 @@ cloud, which is called out separately.
 | `/cam_1/color/camera_info` | 29.97 | 32.5 / 36.6 | 6.2 |
 | `/cam_1/depth/image_raw` | 30.00 | 33.4 / 39.2 | 2.2 |
 | `/cam_1/depth/camera_info` | 30.01 | 33.3 / 38.9 | 2.9 |
-| `/cam_1/depth/color/points` | **2.8 - 10.9** | 68 - 264 / 237 - 1013 | 40.7 - 45.4 |
+| `/cam_1/depth/color/points` | **7.3 - 9.6** (2026-09-24) | 67 - 100 / 272 - 400 | 43 - 53 |
 | `/scan`, `/scan_filtered` | 7.17 | 135.3 / 148.8 | 135.7 |
 | `/imu/data`, `/imu/data_raw`, `/imu/mag` | 10.00 | 100.0 / 102.1 | 2.5 - 3.0 |
 | `/odom`, `/joint_states`, `/vel_raw`, `/voltage` | 10.00 | 100.0 / 102.6 | 1.6 - 3.1 |
@@ -85,12 +89,166 @@ and it stops working below roughly 0.6 m.
 
 ## Point cloud
 
-`/cam_1/depth/color/points` does not reach its 30 Hz target. Measured across
-four windows: **2.83, 5.63, 8.20, 10.93 Hz**, with gaps up to 1.6 s. Each
-additional subscriber measurably degrades it, so there is no single correct
-figure - record the subscriber count alongside any measurement.
+Measured on 2026-09-24 against the pipeline `main` ships at `b144d31`. The
+adapter packs each point to 16 bytes (#38) and by default drops non-finite
+returns (`cloud_strip_nan=true`, #41), so `/cam_1/depth/color/points` is an
+unorganized cloud (`height=1`) whose size follows the scene.
+`cloud_decimation` is 1. These figures supersede the
+[2026-09-17 ones](#2026-09-17-figures-superseded).
 
-Ruled out as causes, with evidence:
+### Measurement record
+
+| | |
+|---|---|
+| Robot | `x3-c`, stationary, facing the same view throughout |
+| Date | 2026-09-24 |
+| Commit | `b144d31` (`main`), clean worktree |
+| Cloud | about 33,700 points, 538 - 542 KB per message; scene 2.0 - 3.5 m ahead |
+| Probe | `tools/sensor_capability_probe.py` from #44, `--group camera --topic /voltage --duration 40 --per-message` |
+| Battery | 10.1 V at boot, 9.9 V at the last run |
+| USB | Astra depth at `1-2.1`, on bus 1 with the motor's hub; on 2026-09-17 the camera had a bus to itself. 0 disconnects, `throttled=0x0`, SoC 48 - 49 C |
+| Boot | Warm reboot (`systemctl reboot`); both Astra functions enumerated; the ready gate passed |
+| Raw evidence | [robot_artifacts/x3c_sensor_capability_2026-09-24/](../robot_artifacts/x3c_sensor_capability_2026-09-24/), including the scripts that ran each condition |
+
+"Cloud subscribers" counts the probe. Except in the paired run, the probe also
+subscribes to both images and both `camera_info` topics, the same set the boot
+gate subscribes to.
+
+| Condition | Platform age | Cloud subscribers | Rate (Hz) | Stamp period median / p95 / p99 / max (ms) | Frames delivered | Latency median / p95 (ms) | Dropouts | Gate windows under 3 Hz |
+|---|---|---|---|---|---|---|---|---|
+| Boot | 25 s | 1 | 9.56 | 67 / 272 / 556 / 900 | 31.9% | 52 / 55 | 51 | 7 of 375 (min 1.88 Hz) |
+| Settled, run 1 | 10.3 min | 1 | 7.29 | 100 / 400 / 600 / 667 | 24.3% | 52 / 54 | 44 | 17 of 288 (min 2.00 Hz) |
+| Settled, run 2 | 11.0 min | 1 | 9.01 | 67 / 300 / 627 / 1133 | 30.0% | 53 / 56 | 61 | 2 of 357 (min 2.31 Hz) |
+| Settled, run 3 | 11.7 min | 1 | 8.51 | 67 / 367 / 609 / 1069 | 28.4% | 45 / 51 | 56 | 11 of 334 (min 2.31 Hz) |
+| Settled, previous boot | 22.7 min | 1 | 8.67 | 100 / 300 / 467 / 567 | 28.9% | 53 / 57 | 35 | 7 of 342 (min 2.50 Hz) |
+| Settled + RViz over WiFi | 13.1 min | 2 | 8.88 | 100 / 200 / 267 / 700 | 29.6% | 343 / 444 | 3 | 0 of 350 (min 3.75 Hz) |
+| Settled, RViz closed again | 14.3 min | 1 | 9.18 | 67 / 307 / 500 / 900 | 30.6% | 43 / 48 | 56 | 7 of 334 (min 2.00 Hz) |
+| Paired: public topic | 15.0 min | 1 | 8.70 | 34 / 400 / 689 / 1100 | 29.0% | 53 / 55 | 124 | 12 of 343 (min 1.87 Hz) |
+| Paired: driver topic | 15.0 min | 2 | 8.64 | 33 / 467 / 725 / 933 | 28.8% | 43 / 44 | 112 | not gated |
+
+- **Frames delivered** is the share of 30 Hz camera frames that became a
+  cloud, counted from header stamps. **Dropouts** is the probe's older count
+  of arrival gaps longer than 2.5 times the median gap. With a median gap
+  already two or three frames long, that count misses most lost frames, so use
+  frames delivered instead.
+- Nothing changed between the settled runs, yet they span 7.3 - 9.2 Hz.
+  Compare any condition against that spread, not against a single run.
+- **Boot was not slower.** The boot capture started 25 s after the platform
+  and measured 9.56 Hz, just above the settled runs, with 52 ms latency across
+  the whole window. It did not reproduce the 1.15 Hz of 2026-09-18, which ran
+  the older 32-byte organized cloud on a different USB layout.
+
+### Timing model for the simulator
+
+For a consumer on the robot with nothing else subscribed to the cloud:
+
+- **Latency is about 50 ms, and effectively constant.** Medians are 43 - 53 ms
+  across runs, with a per-run standard deviation of 1 - 3 ms. `header.stamp` is
+  the capture time, so a simulated cloud should be published about 50 ms after
+  its frame and keep that frame's stamp.
+- **Gaps are whole camera frames.** All 2,747 stamp gaps measured on the
+  public topic landed on a 33.3 ms frame boundary. Consecutive gaps are
+  uncorrelated: their lag-1 autocorrelation is 0.01 - 0.06, inside the range
+  that shuffling the same gaps produces. Drawing each gap independently from
+  the distribution below therefore reproduces what was measured.
+
+Frames from one cloud to the next, pooled over the three settled runs (988
+gaps):
+
+| Frames | Gap (ms) | Probability | Cumulative |
+|---|---|---|---|
+| 1 | 33 | 0.3310 | 0.3310 |
+| 2 | 67 | 0.1852 | 0.5162 |
+| 3 | 100 | 0.1538 | 0.6700 |
+| 4 | 133 | 0.0901 | 0.7601 |
+| 5 | 167 | 0.0526 | 0.8128 |
+| 6 | 200 | 0.0466 | 0.8593 |
+| 7 | 233 | 0.0283 | 0.8877 |
+| 8 | 267 | 0.0223 | 0.9099 |
+| 9 | 300 | 0.0202 | 0.9302 |
+| 10 | 333 | 0.0132 | 0.9433 |
+| 11 | 367 | 0.0132 | 0.9565 |
+| 12 | 400 | 0.0061 | 0.9626 |
+| 13 | 433 | 0.0091 | 0.9717 |
+| 14 | 467 | 0.0051 | 0.9767 |
+| 15 | 500 | 0.0040 | 0.9808 |
+| 16 | 533 | 0.0010 | 0.9818 |
+| 17 | 567 | 0.0040 | 0.9858 |
+| 18 | 600 | 0.0040 | 0.9899 |
+| 19 | 633 | 0.0020 | 0.9919 |
+| 20 | 667 | 0.0020 | 0.9939 |
+| 23 | 767 | 0.0010 | 0.9949 |
+| 24 | 800 | 0.0010 | 0.9960 |
+| 25 | 833 | 0.0010 | 0.9970 |
+| 28 | 933 | 0.0010 | 0.9980 |
+| 32 | 1067 | 0.0010 | 0.9990 |
+| 34 | 1133 | 0.0010 | 1.0000 |
+
+The mean gap is 3.63 frames, which is 8.3 Hz with 27.6% of frames delivered.
+The median is 2 frames, p95 is 11 frames (367 ms), and the longest gap was 34
+frames (1.13 s). The raw JSON keeps per-message stamps for refitting.
+
+The boot run delivered 31.9% of frames, close to the settled runs' 24.3 -
+30.6%, so the same model covers boot. The RViz run below does not fit it.
+
+### Margin against the boot gate
+
+`rosmaster-platform-ready` runs `tools/physical_contract_probe.py`, which
+rates the cloud from the first five clouds it receives: the upper median of
+their four stamp periods must fall within 3.0 - 40.0 Hz. Applying that exact
+statistic to every five-cloud window of the seven runs with one cloud
+subscriber:
+
+- **63 of 2,373 windows (2.65%) rate below 3.0 Hz**, the lowest at 1.87 Hz.
+  They come from settled runs as well as from the boot run.
+- The median window rates 10 - 15 Hz. The floor is usually cleared by a wide
+  margin, but a few long gaps inside five clouds are enough to fail it.
+- The first window of the boot capture rated exactly 3.00 Hz. The gate itself
+  passed on this boot.
+
+The gate samples one window per boot. If that window behaves like any other,
+about one boot in 40 fails the gate on the point cloud alone, on a healthy and
+idle robot. A failed gate sends no buzzer or LED boot signal (see the
+[2026-09-18 incident](troubleshooting/incidents/2026-09-18-x3-c-usb-hub-dropout.md)).
+
+### Where frames are lost
+
+The paired run subscribed to the driver's topic and the public topic at once,
+and matched clouds by stamp, which the adapter preserves:
+
+- **The driver is the main loss.** Over 1,192 camera frames it published at
+  least 429 clouds, so it produces a cloud for only about 36 - 38% of frames.
+- **The adapter republished about 76 - 81% of the driver's clouds**, adding
+  10.8 ms median latency (p95 12.6 ms).
+- The probe's own subscription to the driver's topic missed 85 clouds that the
+  adapter did republish, about as many as the adapter missed (83). Two
+  independent subscribers each losing about a fifth of the 2.4 MB messages
+  points at delivery of large best-effort messages rather than at the
+  adapter's processing, but this was not isolated.
+
+### A remote RViz delays every subscriber
+
+With RViz2 on a workstation subscribed to the cloud over WiFi, the probe on
+the robot still received 8.88 Hz (29.6% of frames), but **343 ms after capture
+instead of about 50 ms**. The p95 was 444 ms, no cloud arrived in under
+250 ms, and the delay held steady across the window. Gaps also became more
+regular, and no window fell under the gate floor. In the next run, with RViz
+closed, latency was back to 43 ms.
+
+The cause was not isolated. What matters for consumers is the effect: one
+off-robot viewer delays the cloud for every consumer on the robot, which a
+simulator running on one machine does not show. The RViz configuration used
+is `cloud_only.rviz` in the raw evidence.
+
+### 2026-09-17 figures (superseded)
+
+Measured on `01e1a60` with the driver's 32-byte, organized cloud
+(2,457,600 bytes per message) and the camera on its own USB bus: **2.83, 5.63,
+8.20 and 10.93 Hz** across four windows, with gaps up to 1.6 s. In a paired
+window the driver's topic ran 10.93 Hz and the public topic 8.20 Hz, with the
+adapter adding about 12 ms.
+
+Ruled out as causes of the low rate, with evidence from that session:
 
 | Hypothesis | Verdict | Evidence |
 |---|---|---|
@@ -100,34 +258,19 @@ Ruled out as causes, with evidence:
 | UDP socket buffers | **No** | +1 `RcvbufErrors` in 20 s; datagram count far too low for a fragmented 2.4 MB message - it travels over shared memory |
 | Color/depth frame pairing | **No** | 99.8% of depth frames pair within half a frame period (median 7.3 ms) |
 
-What remains is the message itself. Each cloud is **2,457,600 bytes**, and
-**half of that is padding**: `point_step` is 32 bytes carrying 16 bytes of
-`x,y,z,rgb` (offsets 0, 4, 8, 16). At 30 Hz that is 74 MB/s of intra-host DDS
-traffic. Repacking to 16 bytes per point is the next thing to try, and the
-adapter already rewrites the cloud, so it is nearly free to do there.
+That left the message size. Repacking to 16 bytes (#38) halved it and
+stripping NaNs (#41) roughly halved it again, to about 540 KB. Neither
+measurably changed the rate, and the 2026-09-24 paired run places most of the
+loss inside the driver.
 
-The adapter contributes but is not the dominant loss: in a paired window the
-raw hardware topic ran 10.93 Hz and the public topic 8.20 Hz, with the adapter
-adding ~12 ms of latency.
-
-### This fails the boot-ready gate
-
-The cloud rate is not only a usability problem. `tools/physical_contract_probe.py`
-requires `/cam_1/depth/color/points` within `3.0..40.0 Hz`, and on the
-2026-09-18 boot it measured **1.15 Hz** and failed:
+On the 2026-09-18 boot the gate measured the cloud at 1.15 Hz and failed:
 
 ```
 Physical contract FAILED: /cam_1/depth/color/points: measured 1.15 Hz outside 3.0..40.0 Hz
 ```
 
-`rosmaster-platform-ready` runs that probe before signalling, so the buzzer and
-the steady `RGBLight` battery display never ran and the robot gave no
-boot-ready indication. Re-running the service by hand once the system had
-settled passed at 9.63 Hz and signalled normally.
-
-The cloud therefore sits right on the probe's lower bound: healthy enough after
-settling, below it while the machine is still busy at boot. Any change here
-should be re-checked against that 3 Hz floor, not just against RViz smoothness.
+Re-running the ready service by hand once the system had settled passed at
+9.63 Hz and signalled normally.
 
 ### Reading a rate from this tool
 
@@ -139,6 +282,12 @@ window-averaged rate alongside. A reported rate with no coverage warning
 describes the whole window; one with a warning describes only the active span.
 Treat any coverage warning as "this publisher stopped", which is how the
 2026-09-18 motor-controller dropout was first spotted.
+
+Arrival-based fields (`period_ms`, `dropouts`) describe what a subscriber
+experienced. Stamp-based fields describe what the publisher produced:
+`stamp_period_ms`, `frame_cadence` (camera types only, gaps in whole frames),
+and `contract_rate_hz` (the boot gate's statistic over every window, for the
+topics it checks).
 
 ## LiDAR
 
