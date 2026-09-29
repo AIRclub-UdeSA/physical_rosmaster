@@ -1,0 +1,128 @@
+13.94 s uptime: waiting for rosmaster-platform-ready to finish
+42.88 s uptime: ready gate finished, result success
+42.99 s uptime: ntp synchronized=yes; starting capture
+==============================================================================
+X3 sensor capability measurement
+==============================================================================
+host            : yahboom
+started (UTC)   : 2026-09-24T17:55:50Z
+duration        : 40.0 s per topic
+mode            : concurrent
+content samples : 3 per topic
+host uptime     : 45 s at start
+adapter         : cloud_decimation=1, cloud_strip_nan=True, target_cloud_frame=cam_1_depth_frame
+note            : astra_depth_usb_path=1-2.1
+note            : commit=b144d31
+note            : condition=boot
+note            : ntp_synchronized=yes
+note            : platform_active=active
+note            : platform_age_s_at_start=24.8
+note            : ready_exited_s_before_start=0.2
+note            : ready_result=success
+note            : soc_temp_c=49.4
+note            : stationary=yes
+note            : throttled=0x0
+note            : usb_disconnects_this_boot=0
+note            : worktree_dirty_files=0
+
+------------------------------------------------------------------------------
+/cam_1/color/image_raw  [Image]
+------------------------------------------------------------------------------
+  messages 1196 over 40.0 s  ->  29.89 Hz
+  period   median 33.0 ms  p95 44.8 ms  max 79.4 ms  (jitter sd 6.9 ms)
+  latency  median 3.6 ms  p95 15.7 ms  max 19.9 ms
+  stamps   period median 32.1 ms  p95 36.0 ms  max 67.9 ms
+  frames   99.6% of 30 Hz frames delivered, 5 skipped, 0 off-grid gaps
+           frames per gap: 1x1190  2x5
+  gate     5-message rate: first 31.28  min 27.53  p05 27.80  median 30.87 Hz; 0/1192 windows outside 3.0..40.0 Hz
+  payload  median 230400 bytes  min 230400  max 230400
+  others   none subscribed
+  content  320x240 rgb8, step 960, 230400 bytes, frame cam_1_color_optical_frame
+
+------------------------------------------------------------------------------
+/cam_1/color/camera_info  [CameraInfo]
+------------------------------------------------------------------------------
+  messages 1199 over 40.0 s  ->  29.97 Hz
+  period   median 32.9 ms  p95 44.8 ms  max 66.7 ms  (jitter sd 6.5 ms)
+  latency  median 4.3 ms  p95 16.3 ms  max 20.7 ms
+  stamps   period median 32.1 ms  p95 36.0 ms  max 67.9 ms
+  frames   99.8% of 30 Hz frames delivered, 2 skipped, 0 off-grid gaps
+           frames per gap: 1x1196  2x2
+  gate     5-message rate: first 31.28  min 27.53  p05 27.80  median 30.87 Hz; 0/1195 windows outside 3.0..40.0 Hz
+  others   none subscribed
+  content  320x240, model 'plumb_bob', frame cam_1_color_optical_frame
+  intrinsics fx 271.809 fy 271.809 cx 158.719 cy 120.092  (calibrated: True)
+  fov      horizontal 60.97 deg  vertical 47.64 deg
+  distortion d = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+------------------------------------------------------------------------------
+/cam_1/depth/image_raw  [Image]
+------------------------------------------------------------------------------
+  messages 1197 over 40.0 s  ->  29.89 Hz
+  period   median 33.3 ms  p95 35.1 ms  max 67.2 ms  (jitter sd 2.4 ms)
+  latency  median 5.1 ms  p95 6.7 ms  max 9.2 ms
+  stamps   period median 33.3 ms  p95 33.6 ms  max 67.0 ms
+  frames   99.6% of 30 Hz frames delivered, 5 skipped, 0 off-grid gaps
+           frames per gap: 1x1191  2x5
+  gate     5-message rate: first 30.03  min 29.53  p05 29.83  median 29.98 Hz; 0/1193 windows outside 3.0..40.0 Hz
+  payload  median 307200 bytes  min 307200  max 307200
+  others   none subscribed
+  content  320x240 32FC1, step 1280, 307200 bytes, frame cam_1_color_optical_frame
+  depth    valid 44.2%  zero 0.0%  nan 55.8%
+  range    2.035 - 3.451 m (median 3.288, p05 2.175, p95 3.417)
+
+------------------------------------------------------------------------------
+/cam_1/depth/camera_info  [CameraInfo]
+------------------------------------------------------------------------------
+  messages 1201 over 40.0 s  ->  30.01 Hz
+  period   median 33.3 ms  p95 34.9 ms  max 37.6 ms  (jitter sd 1.0 ms)
+  latency  median 6.0 ms  p95 7.6 ms  max 13.4 ms
+  stamps   period median 33.3 ms  p95 33.6 ms  max 34.7 ms
+  frames   100.0% of 30 Hz frames delivered, 0 skipped, 0 off-grid gaps
+           frames per gap: 1x1200
+  gate     5-message rate: first 30.03  min 29.53  p05 29.84  median 29.98 Hz; 0/1197 windows outside 3.0..40.0 Hz
+  others   none subscribed
+  content  320x240, model 'plumb_bob', frame cam_1_color_optical_frame
+  intrinsics fx 271.809 fy 271.809 cx 158.719 cy 120.092  (calibrated: True)
+  fov      horizontal 60.97 deg  vertical 47.64 deg
+  distortion d = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+------------------------------------------------------------------------------
+/cam_1/depth/color/points  [PointCloud2]
+------------------------------------------------------------------------------
+  messages 379 over 40.0 s  ->  9.56 Hz
+  period   median 67.1 ms  p95 272.4 ms  max 900.3 ms  (jitter sd 107.3 ms)
+  dropouts 51 gaps over 168 ms, worst 900 ms, ~180 messages missed
+  latency  median 52.4 ms  p95 55.2 ms  max 59.2 ms
+  stamps   period median 66.7 ms  p95 271.7 ms  max 900.0 ms
+  frames   31.9% of 30 Hz frames delivered, 808 skipped, 0 off-grid gaps
+           frames per gap: 1x138  2x77  3x51  4x42  5x21  6x15  7x8  8x7  9x3  10x1  11x3  12x4  14x1  15x2  16x1  19x1  21x2  27x1
+  gate     5-message rate: first 3.00  min 1.88  p05 4.29  median 10.01 Hz; 7/375 windows outside 3.0..40.0 Hz
+  payload  median 541632 bytes  min 538288  max 545136
+  others   none subscribed
+  content  33887 x 1 points, step 16, 542192 bytes, frame cam_1_depth_frame
+  fields   x, y, z, rgb
+  geometry valid 33887/33887 points (100.0%)
+  extent   x [2.041 3.486]  y [-1.152 1.554]  z [-0.218 1.419] m
+
+------------------------------------------------------------------------------
+/voltage  [Float32]
+------------------------------------------------------------------------------
+  messages 400 over 40.0 s  ->  10.00 Hz
+  period   median 100.0 ms  p95 101.6 ms  max 105.1 ms  (jitter sd 1.0 ms)
+  others   none subscribed
+
+------------------------------------------------------------------------------
+Sensor mounts relative to base_link
+------------------------------------------------------------------------------
+  base_footprint                 xyz [+0.00000 +0.00000 -0.07140] m   rpy [+0.00 +0.00 +0.00] deg
+  laser_link                     xyz [+0.04350 +0.00005 +0.11000] m   rpy [+0.00 +0.00 +180.00] deg
+  imu_link                       xyz [-0.06000 +0.01000 +0.01000] m   rpy [+180.00 +0.00 -90.00] deg
+  cam_1_link                     xyz [+0.05711 +0.00002 +0.03755] m   rpy [+0.00 +0.00 +0.00] deg
+  cam_1_color_frame              xyz [+0.05494 +0.02509 +0.03741] m   rpy [-0.02 +0.27 +0.20] deg
+  cam_1_color_optical_frame      xyz [+0.05494 +0.02509 +0.03741] m   rpy [-90.27 -0.02 -89.80] deg
+  cam_1_depth_frame              xyz [+0.05711 +0.00002 +0.03755] m   rpy [+0.00 +0.00 +0.00] deg
+  cam_1_depth_optical_frame      xyz [+0.05711 +0.00002 +0.03755] m   rpy [-90.00 +0.00 -90.00] deg
+
+JSON written to out/camera_boot.json
+85.27 s uptime: capture exited 0
