@@ -23,8 +23,10 @@ from physical_contract_probe import median_stamp_rate
 from physical_contract_probe import PhysicalContractProbe
 from physical_contract_probe import RATE_LIMITS_HZ
 from sensor_capability_probe import contract_windows
+from sensor_capability_probe import file_blob_id
 from sensor_capability_probe import frame_cadence
 from sensor_capability_probe import git_blob_id
+from sensor_capability_probe import involves_camera
 from sensor_capability_probe import other_endpoints
 from sensor_capability_probe import parse_notes
 from sensor_capability_probe import payload_size
@@ -185,6 +187,19 @@ def test_other_endpoints_excludes_only_this_probe():
 def test_git_blob_id_matches_git_hash_object():
     # `printf 'hello\n' | git hash-object --stdin`
     assert git_blob_id(b"hello\n") == "ce013625030ba8dba906f756967f9e9ca394464a"
+
+
+def test_file_blob_id_reads_a_file_and_tolerates_a_missing_one(tmp_path):
+    path = tmp_path / "hello.txt"
+    path.write_bytes(b"hello\n")
+    assert file_blob_id(str(path)) == "ce013625030ba8dba906f756967f9e9ca394464a"
+    assert file_blob_id(str(tmp_path / "missing")) is None
+
+
+def test_involves_camera_covers_public_and_driver_topics_only():
+    assert involves_camera(["/scan", "/cam_1/depth/color/points"])
+    assert involves_camera(["/_hardware/astra/color/image_raw"])
+    assert not involves_camera(["/scan", "/imu/data", "/voltage"])
 
 
 def test_parse_notes_keeps_values_with_equals_signs():

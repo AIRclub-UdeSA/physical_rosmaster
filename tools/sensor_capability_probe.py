@@ -54,6 +54,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 import hashlib
+import inspect
 import json
 import math
 import sys
@@ -158,6 +159,7 @@ FRAME_QUANTIZED_TYPES = {"Image", "CameraInfo", "PointCloud2"}
 
 # Adapter settings that change the cloud's shape and cost. They are recorded
 # with every measurement so two numbers are never compared across settings.
+CAMERA_TOPIC_PREFIXES = ("/cam_1/", "/_hardware/astra/")
 ADAPTER_NODE = "/astra_sensor_adapter"
 ADAPTER_PARAMETERS = ["cloud_strip_nan", "cloud_decimation", "target_cloud_frame"]
 
@@ -311,6 +313,20 @@ def git_blob_id(content):
     """Return the id ``git hash-object`` gives this content."""
     header = b"blob %d\0" % len(content)
     return hashlib.sha1(header + content).hexdigest()
+
+
+def file_blob_id(path):
+    """Return the git blob id of a file, or None when it cannot be read."""
+    try:
+        with open(path, "rb") as handle:
+            return git_blob_id(handle.read())
+    except OSError:
+        return None
+
+
+def involves_camera(topics):
+    """Return True when any topic is one the Astra adapter or driver publishes."""
+    return any(topic.startswith(CAMERA_TOPIC_PREFIXES) for topic in topics)
 
 
 def host_uptime():
@@ -1116,7 +1132,13 @@ def measure(
 
     started = time.gmtime()
     uptime = host_uptime()
-    adapter_parameters = read_parameters(ADAPTER_NODE, ADAPTER_PARAMETERS)
+    # The adapter's parameters only describe camera topics, and asking for
+    # them costs up to a 2 s wait when the adapter is not running.
+    adapter_parameters = (
+        read_parameters(ADAPTER_NODE, ADAPTER_PARAMETERS)
+        if involves_camera(topics)
+        else {}
+    )
     summaries = []
     transforms = {}
     batches = [[topic] for topic in topics] if sequential else [topics]
@@ -1144,11 +1166,8 @@ def measure(
         if not transforms:
             transforms = probe.transforms()
         probe.destroy_node()
-    try:
-        with open(__file__, "rb") as handle:
-            probe_blob = git_blob_id(handle.read())
-    except OSError:
-        probe_blob = None
+    probe_blob = file_blob_id(__file__)
+    contract_blob = file_blob_id(inspect.getsourcefile(median_stamp_rate))
     return {
         "measurement": {
             "host": socket.gethostname(),
@@ -1164,6 +1183,7 @@ def measure(
             "adapter_parameters": adapter_parameters,
             "notes": notes or {},
             "probe_git_blob": probe_blob,
+            "contract_probe_git_blob": contract_blob,
         },
         "topics": summaries,
         "transforms": transforms,
