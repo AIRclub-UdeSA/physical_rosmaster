@@ -11,6 +11,11 @@ Reproduce any number here with:
 python3 tools/sensor_capability_probe.py --group camera --duration 30 --output camera.json
 ```
 
+The 2026-09-24 point cloud runs below used `--group camera --topic /voltage
+--duration 40 --per-message`, plus `--note KEY=VALUE` for each condition (see
+the README in the raw evidence directory). `--per-message` keeps the
+per-message stamps needed to refit the gap distribution.
+
 Run it **on the robot**. Latency is `receive clock - header.stamp`, so a
 workstation with an unsynchronized clock reports clock offset, not pipeline
 latency.
@@ -43,7 +48,7 @@ comes from that session; every other row is from 2026-09-17.
 | `/cam_1/color/camera_info` | 29.97 | 32.5 / 36.6 | 6.2 |
 | `/cam_1/depth/image_raw` | 30.00 | 33.4 / 39.2 | 2.2 |
 | `/cam_1/depth/camera_info` | 30.01 | 33.3 / 38.9 | 2.9 |
-| `/cam_1/depth/color/points` | **7.3 - 9.6** (2026-09-24) | 67 - 100 / 272 - 400 | 43 - 53 |
+| `/cam_1/depth/color/points` | **7.3 - 9.6** (2026-09-24) | 34 - 100 / 200 - 400 | 43 - 53 (343 with a remote RViz) |
 | `/scan`, `/scan_filtered` | 7.17 | 135.3 / 148.8 | 135.7 |
 | `/imu/data`, `/imu/data_raw`, `/imu/mag` | 10.00 | 100.0 / 102.1 | 2.5 - 3.0 |
 | `/odom`, `/joint_states`, `/vel_raw`, `/voltage` | 10.00 | 100.0 / 102.6 | 1.6 - 3.1 |
@@ -133,10 +138,14 @@ gate subscribes to.
   frames delivered instead.
 - Nothing changed between the settled runs, yet they span 7.3 - 9.2 Hz.
   Compare any condition against that spread, not against a single run.
-- **Boot was not slower.** The boot capture started 25 s after the platform
-  and measured 9.56 Hz, just above the settled runs, with 52 ms latency across
-  the whole window. It did not reproduce the 1.15 Hz of 2026-09-18, which ran
-  the older 32-byte organized cloud on a different USB layout.
+- **The 25 - 65 s window of this boot was not slower.** The capture began 25 s
+  after the platform started, once the ready gate had exited, so it does not
+  include the gate's own window (the first five clouds). It measured 9.56 Hz,
+  just above the settled runs, with 52 ms latency. This is one warm reboot and
+  did not reproduce the 1.15 Hz of 2026-09-18, which ran the older 32-byte
+  organized cloud on a different USB layout. The cold-boot failure in
+  [the Astra enumeration known issue](troubleshooting/known_issues/astra-depth-cold-boot-enumeration-failure.md)
+  is a separate mode that this capture does not cover.
 
 ### Timing model for the simulator
 
@@ -203,8 +212,9 @@ subscriber:
   They come from settled runs as well as from the boot run.
 - The median window rates 10 - 15 Hz. The floor is usually cleared by a wide
   margin, but a few long gaps inside five clouds are enough to fail it.
-- The first window of the boot capture rated exactly 3.00 Hz. The gate itself
-  passed on this boot.
+- The first window of the boot capture rated 3.003 Hz, about 0.1% above the
+  floor. The gate itself passed on this boot, but it does not retry:
+  `rosmaster-platform-ready` runs with `Restart=no`.
 
 The gate samples one window per boot. If that window behaves like any other,
 about one boot in 40 fails the gate on the point cloud alone, on a healthy and
@@ -216,11 +226,14 @@ idle robot. A failed gate sends no buzzer or LED boot signal (see the
 The paired run subscribed to the driver's topic and the public topic at once,
 and matched clouds by stamp, which the adapter preserves:
 
-- **The driver is the main loss.** Over 1,192 camera frames it published at
-  least 429 clouds, so it produces a cloud for only about 36 - 38% of frames.
+- **The driver is the main loss.** Over about 1,190 camera frames the two
+  subscribers together saw 430 distinct clouds, so the driver produced a cloud
+  for at least 36% of frames. The figure is a lower bound because a cloud
+  missed by both subscribers is not counted. The driver-topic subscriber alone
+  saw 344 (28.8%).
 - **The adapter republished about 76 - 81% of the driver's clouds**, adding
   10.8 ms median latency (p95 12.6 ms).
-- The probe's own subscription to the driver's topic missed 85 clouds that the
+- The probe's own subscription to the driver's topic missed 86 clouds that the
   adapter did republish, about as many as the adapter missed (83). Two
   independent subscribers each losing about a fifth of the 2.4 MB messages
   points at delivery of large best-effort messages rather than at the
