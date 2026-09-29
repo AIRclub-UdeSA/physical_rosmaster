@@ -90,6 +90,20 @@ REQUIRED_DIAGNOSTIC_SOURCES = {
     "yahboomcar_base_node: wheel encoder odometry",
     "yahboomcar_bringup: motor controller and onboard sensors",
 }
+# Consecutive messages kept per topic. The rate check sees only these, so a
+# topic is judged on the first few messages after the probe subscribes.
+DEFAULT_SAMPLES = 5
+RATE_LIMITS_HZ = {
+    "/scan": (3.0, 20.0),
+    "/imu/data": (5.0, 30.0),
+    "/cam_1/color/image_raw": (3.0, 40.0),
+    "/cam_1/depth/image_raw": (3.0, 40.0),
+    "/cam_1/color/camera_info": (3.0, 40.0),
+    "/cam_1/depth/camera_info": (3.0, 40.0),
+    "/cam_1/depth/color/points": (3.0, 40.0),
+    "/joint_states": (5.0, 20.0),
+    "/odom": (5.0, 20.0),
+}
 
 
 @dataclass(frozen=True)
@@ -111,13 +125,31 @@ def finite_positive(value, name):
     return parsed
 
 
+def median_stamp_rate(stamps):
+    """
+    Return the rate implied by the median increasing header-stamp period.
+
+    With an even number of periods this takes the upper median, so for the
+    default five samples it is the third-shortest of four periods. Returns
+    None when no two stamps increase.
+    """
+    periods = [
+        current - previous
+        for previous, current in zip(stamps, stamps[1:])
+        if current > previous
+    ]
+    if not periods:
+        return None
+    return 1.0 / sorted(periods)[len(periods) // 2]
+
+
 class PhysicalContractProbe(Node):
     """Collect consecutive messages and validate the hardware contract."""
 
     def __init__(self):
         super().__init__("physical_contract_probe")
         self.declare_parameter("timeout", 35.0)
-        self.declare_parameter("samples", 5)
+        self.declare_parameter("samples", DEFAULT_SAMPLES)
         self.declare_parameter("diagnostic_max_age", 2.0)
         self.timeout = float(self.get_parameter("timeout").value)
         self.samples = max(3, int(self.get_parameter("samples").value))
@@ -256,16 +288,11 @@ class PhysicalContractProbe(Node):
             errors.append("%s: frame_id is empty" % topic)
 
     def validate_rate(self, topic, minimum, maximum, errors):
-        stamps = [self.stamp_seconds(message) for message in self.messages[topic]]
-        periods = [
-            current - previous
-            for previous, current in zip(stamps, stamps[1:])
-            if current > previous
-        ]
-        if not periods:
+        rate = median_stamp_rate(
+            [self.stamp_seconds(message) for message in self.messages[topic]]
+        )
+        if rate is None:
             return
-        period = sorted(periods)[len(periods) // 2]
-        rate = 1.0 / period
         if not minimum <= rate <= maximum:
             errors.append(
                 "%s: measured %.2f Hz outside %.1f..%.1f Hz"
@@ -439,17 +466,7 @@ class PhysicalContractProbe(Node):
         for topic in TOPIC_TYPES:
             if topic not in ("/diagnostics", "/tf", "/tf_static"):
                 self.validate_header(topic, errors)
-        for topic, limits in {
-            "/scan": (3.0, 20.0),
-            "/imu/data": (5.0, 30.0),
-            "/cam_1/color/image_raw": (3.0, 40.0),
-            "/cam_1/depth/image_raw": (3.0, 40.0),
-            "/cam_1/color/camera_info": (3.0, 40.0),
-            "/cam_1/depth/camera_info": (3.0, 40.0),
-            "/cam_1/depth/color/points": (3.0, 40.0),
-            "/joint_states": (5.0, 20.0),
-            "/odom": (5.0, 20.0),
-        }.items():
+        for topic, limits in RATE_LIMITS_HZ.items():
             self.validate_rate(topic, *limits, errors)
             if self.first_arrivals[topic] - self.started_at > 25.0:
                 errors.append("%s: first message took more than 25s" % topic)

@@ -51,6 +51,7 @@ There are two separate contexts, and most contributions only need the first:
     tools/test_motor_live_loss_probe.py \
     tools/test_motor_live_loss_ros_smoke.py \
     tools/test_physical_contract_probe.py \
+    tools/test_sensor_capability_probe.py \
     tools/test_safe_cmd_vel_pulse.py
   ```
 
