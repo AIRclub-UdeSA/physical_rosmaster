@@ -29,6 +29,10 @@ Run it ON THE ROBOT. Latency is measured as (receive clock - header.stamp),
 so a workstation whose clock is not synchronized to the robot reports a
 constant clock offset rather than true pipeline latency.
 
+It imports the boot gate's rate statistic and limits, so it must sit next to
+tools/physical_contract_probe.py; copying this file alone fails with an
+ImportError.
+
 Measurement load is itself a result. On a Raspberry Pi, subscribing to the
 XYZRGB cloud is not free, so --sequential measures one topic at a time and
 --content-samples bounds heavy per-message parsing. Record which mode
