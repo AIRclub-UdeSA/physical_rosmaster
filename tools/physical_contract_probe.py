@@ -14,15 +14,30 @@
 # limitations under the License.
 
 """
-Validate the physical X3 against the simulator-facing robot contract.
+Validate a ROSMASTER X3 platform against the simulator-facing robot contract.
 
-Derived from the simulator probe at commit 772ba250bafeb0e93e651b7d8d78a4598feba118.
-Simulation clock, ground truth, simulator-specific rates, and ideal camera FOV
-checks are intentionally replaced with physical-hardware checks.
+The same probe grades the physical robot and the simulator
+(AIRclub-UdeSA/yahboom_rosmaster), so one consumer's contract has one definition.
+It began as a copy of the simulator's own probe, with the simulation clock,
+ground truth, simulator-specific rates and ideal camera FOV checks replaced by
+physical-hardware checks. ``target`` selects what is graded:
+
+``hardware`` (default)
+    The physical robot. Requires healthy ``/diagnostics`` from the base node and
+    the motor controller, and two ``/tf_static`` messages (robot_state_publisher
+    and the camera driver each latch one).
+
+``simulator``
+    The simulator. It differs from ``hardware`` in exactly two ways, because the
+    simulator has no driver: ``/diagnostics`` is not checked, and ``/tf_static``
+    needs one message (robot_state_publisher's). Every other topic, frame, type,
+    rate limit and field is graded as on the robot. Run it with
+    ``--ros-args -p target:=simulator -p use_sim_time:=true``.
 """
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 import math
 import struct
@@ -107,6 +122,42 @@ RATE_LIMITS_HZ = {
 
 
 @dataclass(frozen=True)
+class Target:
+    """What differs between the platforms the probe can grade."""
+
+    diagnostics: bool
+    tf_static_messages: int
+
+
+TARGETS = {
+    "hardware": Target(diagnostics=True, tf_static_messages=2),
+    "simulator": Target(diagnostics=False, tf_static_messages=1),
+}
+# Stamps kept per timestamped topic for the TF check: about two seconds of the
+# 30 Hz camera, longer for the slower topics.
+RECENT_STAMPS = 64
+TF_CHECKED_TOPICS = (
+    "/scan",
+    "/imu/data",
+    "/cam_1/color/image_raw",
+    "/cam_1/depth/image_raw",
+    "/cam_1/color/camera_info",
+    "/cam_1/depth/camera_info",
+    "/cam_1/depth/color/points",
+    "/odom",
+)
+
+
+def resolve_target(name):
+    """Return the ``TARGETS`` entry called ``name`` or reject an unknown one."""
+    if name not in TARGETS:
+        raise ValueError(
+            "target must be one of %s, got %r" % (sorted(TARGETS), name)
+        )
+    return TARGETS[name]
+
+
+@dataclass(frozen=True)
 class RequiredDiagnosticObservation:
     """Latest required status and its local monotonic receive time."""
 
@@ -144,13 +195,35 @@ def median_stamp_rate(stamps):
 
 
 class PhysicalContractProbe(Node):
-    """Collect consecutive messages and validate the hardware contract."""
+    """Collect consecutive messages and validate the platform contract."""
+
+    # Class-level defaults, so state built without __init__ (the unit tests)
+    # grades the hardware.
+    target = TARGETS["hardware"]
+    topic_types = TOPIC_TYPES
+    recent_stamps = {}
+
+    def configure_target(self, name):
+        """Select what is graded: see the module docstring."""
+        self.target = resolve_target(name)
+        self.topic_types = {
+            topic: spec
+            for topic, spec in TOPIC_TYPES.items()
+            if self.target.diagnostics or topic != "/diagnostics"
+        }
+
+    @property
+    def required_diagnostic_sources(self):
+        """Return the owners whose /diagnostics are graded on this target."""
+        return REQUIRED_DIAGNOSTIC_SOURCES if self.target.diagnostics else frozenset()
 
     def __init__(self):
         super().__init__("physical_contract_probe")
         self.declare_parameter("timeout", 35.0)
         self.declare_parameter("samples", DEFAULT_SAMPLES)
         self.declare_parameter("diagnostic_max_age", 2.0)
+        self.declare_parameter("target", "hardware")
+        self.configure_target(self.get_parameter("target").value)
         self.timeout = float(self.get_parameter("timeout").value)
         self.samples = max(3, int(self.get_parameter("samples").value))
         self.diagnostic_max_age = finite_positive(
@@ -158,8 +231,15 @@ class PhysicalContractProbe(Node):
             "diagnostic_max_age",
         )
         self.required_counts = {
-            topic: 2 if topic == "/tf_static" else self.samples
-            for topic in TOPIC_TYPES
+            topic: (
+                self.target.tf_static_messages
+                if topic == "/tf_static"
+                else self.samples
+            )
+            for topic in self.topic_types
+        }
+        self.recent_stamps = {
+            topic: deque(maxlen=RECENT_STAMPS) for topic in TF_CHECKED_TOPICS
         }
         self.messages = {topic: [] for topic in self.required_counts}
         self.observed_dynamic_tf_edges = set()
@@ -181,7 +261,7 @@ class PhysicalContractProbe(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
             reliability=ReliabilityPolicy.RELIABLE,
         )
-        for topic, (message_type, _) in TOPIC_TYPES.items():
+        for topic, (message_type, _) in self.topic_types.items():
             qos = (
                 static_tf_qos
                 if topic == "/tf_static"
@@ -203,7 +283,12 @@ class PhysicalContractProbe(Node):
             self.tf_buffer, self, spin_thread=False
         )
         self.get_logger().info(
-            "Waiting up to %.1fs for the physical platform contract" % self.timeout
+            "Waiting up to %.1fs for the %s platform contract%s"
+            % (
+                self.timeout,
+                "simulator" if self.target is TARGETS["simulator"] else "physical",
+                "" if self.target.diagnostics else " (no /diagnostics checks)",
+            )
         )
 
     def capture(self, topic, message):
@@ -218,9 +303,19 @@ class PhysicalContractProbe(Node):
                 )
                 for transform in message.transforms
             )
+        recent = self.recent_stamps.get(topic)
+        if recent is not None:
+            recent.append(
+                (
+                    Time.from_msg(message.header.stamp),
+                    message.child_frame_id
+                    if topic == "/odom"
+                    else message.header.frame_id,
+                )
+            )
         if topic == "/diagnostics":
             for status in message.status:
-                if status.name in REQUIRED_DIAGNOSTIC_SOURCES:
+                if status.name in self.required_diagnostic_sources:
                     self.latest_required_diagnostics[status.name] = (
                         RequiredDiagnosticObservation(status, received_at)
                     )
@@ -240,7 +335,7 @@ class PhysicalContractProbe(Node):
                 for topic, count in self.required_counts.items()
             )
             and REQUIRED_DYNAMIC_TF_EDGE in self.observed_dynamic_tf_edges
-            and REQUIRED_DIAGNOSTIC_SOURCES.issubset(
+            and self.required_diagnostic_sources.issubset(
                 self.latest_required_diagnostics
             )
             and not diagnostic_age_errors
@@ -249,7 +344,7 @@ class PhysicalContractProbe(Node):
     def required_diagnostic_age_errors(self, now):
         """Return receive-age errors for independently tracked owners."""
         errors = []
-        for name in REQUIRED_DIAGNOSTIC_SOURCES & set(
+        for name in self.required_diagnostic_sources & set(
             self.latest_required_diagnostics
         ):
             observation = self.latest_required_diagnostics[name]
@@ -301,7 +396,7 @@ class PhysicalContractProbe(Node):
 
     def validate_graph(self, errors):
         graph_types = dict(self.get_topic_names_and_types())
-        for topic, (_, expected_type) in TOPIC_TYPES.items():
+        for topic, (_, expected_type) in self.topic_types.items():
             actual_types = graph_types.get(topic, [])
             if expected_type not in actual_types:
                 errors.append(
@@ -361,25 +456,41 @@ class PhysicalContractProbe(Node):
             errors.append("depth image: no plausible metric depth samples")
 
     def validate_timestamped_tf(self, errors):
-        for topic in (
-            "/scan",
-            "/imu/data",
-            "/cam_1/color/image_raw",
-            "/cam_1/depth/image_raw",
-            "/cam_1/color/camera_info",
-            "/cam_1/depth/camera_info",
-            "/cam_1/depth/color/points",
-            "/odom",
-        ):
-            message = self.messages[topic][-1]
-            frame = message.child_frame_id if topic == "/odom" else message.header.frame_id
-            if not self.tf_buffer.can_transform(
-                "odom",
-                frame,
-                Time.from_msg(message.header.stamp),
-                timeout=Duration(seconds=0.2),
+        """
+        Require each sensor frame to resolve in TF at a recent message time.
+
+        tf2 never extrapolates, so a stamp can only be looked up inside the
+        history the TF listener holds. The listener starts hearing /tf a little
+        after the first sensor messages arrive (up to about a second in
+        simulator runs), so the earliest stamps can predate it, and the newest
+        can be later than the newest 10 Hz odometry transform. Each topic is
+        therefore judged on its newest kept stamp that resolves. A frame that
+        is missing from TF resolves at none of them, so it still fails, and so
+        does a stamp outside the TF time base.
+        """
+        for topic in TF_CHECKED_TOPICS:
+            kept = list(self.recent_stamps.get(topic, ()))
+            if not kept:
+                errors.append("%s: no stamps were kept for the TF check" % topic)
+                continue
+            if any(
+                self.tf_buffer.can_transform(
+                    "odom", frame, stamp, timeout=Duration(seconds=0)
+                )
+                for stamp, frame in reversed(kept)
             ):
-                errors.append("%s: cannot resolve odom -> %s at message time" % (topic, frame))
+                continue
+            errors.append(
+                "%s: cannot resolve odom -> %s at any of its last %d stamps "
+                "(%.3f..%.3f s)"
+                % (
+                    topic,
+                    kept[-1][1],
+                    len(kept),
+                    kept[0][0].nanoseconds * 1e-9,
+                    kept[-1][0].nanoseconds * 1e-9,
+                )
+            )
 
     def validate_diagnostics(self, errors):
         """Require current healthy status from both hardware-facing owners."""
@@ -387,13 +498,13 @@ class PhysicalContractProbe(Node):
             name: observation.status
             for name, observation in self.latest_required_diagnostics.items()
         }
-        missing = REQUIRED_DIAGNOSTIC_SOURCES - set(latest_status)
+        missing = self.required_diagnostic_sources - set(latest_status)
         if missing:
             errors.append("/diagnostics missing %s" % sorted(missing))
         errors.extend(
             self.required_diagnostic_age_errors(self._monotonic_clock())
         )
-        for name in REQUIRED_DIAGNOSTIC_SOURCES & set(latest_status):
+        for name in self.required_diagnostic_sources & set(latest_status):
             status = latest_status[name]
             if status.level != DiagnosticStatus.OK:
                 errors.append(
@@ -463,7 +574,7 @@ class PhysicalContractProbe(Node):
             return errors
 
         self.validate_graph(errors)
-        for topic in TOPIC_TYPES:
+        for topic in self.topic_types:
             if topic not in ("/diagnostics", "/tf", "/tf_static"):
                 self.validate_header(topic, errors)
         for topic, limits in RATE_LIMITS_HZ.items():
