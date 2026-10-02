@@ -34,7 +34,7 @@ excluded, and the hardware-only extensions below are additional.
 | `/cam_1/color/*` | Calibrated RGB8 color image and camera info |
 | `/cam_1/depth/*` | Metric 32FC1 depth, camera info, and XYZRGB cloud |
 
-The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/data_raw`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available.
+The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available. `/imu/data_raw`, the Madgwick filter's input, is published by the simulator as well.
 
 ## Motor transport and failure boundary
 
@@ -221,6 +221,21 @@ source /root/yahboomcar_ws/install/setup.bash
 cd /root/yahboomcar_ws/src/physical_rosmaster
 python3 tools/physical_contract_probe.py
 ```
+
+The same probe grades the simulator. Its `target` parameter selects what is
+checked: `hardware` (the default) is the robot, and `simulator` differs in two
+ways only, because the simulator has no driver: it does not check
+`/diagnostics`, and it needs one `/tf_static` message instead of two.
+
+```bash
+python3 tools/physical_contract_probe.py --ros-args \
+  -p target:=simulator -p use_sim_time:=true -p samples:=10
+```
+
+With the default five samples the cloud's 3 Hz floor fails by chance about 1.8%
+of the time, whichever target is graded: the cloud arrives in whole-frame gaps
+whose 95th percentile is 11 frames (see `docs/sensor_capabilities.md`, "Point
+cloud"), and the check takes the median period of four gaps.
 
 Normal bringup shuts down when a required process exits — the motor driver on
 missing/stale report channels, receiver failure, or a serial-write failure;

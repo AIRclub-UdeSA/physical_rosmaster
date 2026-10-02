@@ -91,7 +91,6 @@ tf:
 
 hardware_extensions:
   - /diagnostics
-  - /imu/data_raw
   - /imu/mag
   - /vel_raw
   - /voltage
@@ -99,6 +98,14 @@ hardware_extensions:
   - /Buzzer
   - /RGBLight
   - /scan_filtered
+
+# Hardware topics that the simulator publishes too. /imu/data_raw is the input
+# of the Madgwick filter that produces /imu/data, on the robot and in the
+# simulator (yahboom_rosmaster #43 step 8c, decision D2), so it is not
+# hardware-only. It is not a team-facing interface, and the probe does not
+# grade it.
+simulator_published_extensions:
+  - /imu/data_raw
 
 excluded_simulator_interfaces:
   - /clock
