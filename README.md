@@ -20,7 +20,7 @@ Default bringup never publishes `/cmd_vel`. Joystick, keyboard, pulse tests, and
 
 The machine-readable contract is
 [config/robot_contract.yaml](config/robot_contract.yaml). Its simulator-facing
-interfaces match simulator commit `772ba25`; `/clock` and ground truth are
+interfaces match simulator commit `f365005`, where the simulator's CI runs this repository's `tools/physical_contract_probe.py` against it; `/clock` and ground truth are
 excluded, and the hardware-only extensions below are additional.
 
 | Interface | Physical implementation |
@@ -164,6 +164,7 @@ python3 -m pytest -q \
   tools/test_motor_live_loss_probe.py \
   tools/test_motor_live_loss_ros_smoke.py \
   tools/test_physical_contract_probe.py \
+  tools/test_robot_contract_matches_simulator.py \
   tools/test_sensor_capability_probe.py \
   tools/test_safe_cmd_vel_pulse.py
 )
@@ -236,6 +237,15 @@ With the default five samples the cloud's 3 Hz floor fails by chance about 1.8%
 of the time, whichever target is graded: the cloud arrives in whole-frame gaps
 whose 95th percentile is 11 frames (see `docs/sensor_capabilities.md`, "Point
 cloud"), and the check takes the median period of four gaps.
+
+`simulator_reference.commit` in `config/robot_contract.yaml` names the simulator
+commit this contract was last checked against. CI fetches the simulator's parity
+ledger at that commit and `tools/test_robot_contract_matches_simulator.py` checks
+the contract against it (topics, types, frame ids, required frames, hardware-only
+topics and the ones the simulator publishes too). Without the ledger the test
+skips on a workstation; point `SIMULATOR_LEDGER` at
+`yahboom_rosmaster_gazebo/config/real_robot_contract.yaml` of a checkout at that
+commit to run it. In CI a missing ledger fails.
 
 Normal bringup shuts down when a required process exits — the motor driver on
 missing/stale report channels, receiver failure, or a serial-write failure;
