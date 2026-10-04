@@ -2,8 +2,17 @@ version: 1
 name: rosmaster_x3_platform
 simulator_reference:
   repository: https://github.com/AIRclub-UdeSA/yahboom_rosmaster.git
-  commit: 772ba250bafeb0e93e651b7d8d78a4598feba118
+  commit: f365005ecc583de582823caf0a2c51170157ef14
+  ledger: yahboom_rosmaster_gazebo/config/real_robot_contract.yaml
+  # The simulator's own probe, which reads its expected values from the ledger.
   probe: yahboom_rosmaster_gazebo/scripts/sensor_contract_probe.py
+  # #43 step 9: the simulator's CI also runs this repository's
+  # tools/physical_contract_probe.py (target:=simulator) in every
+  # sensor_contract_* launch test, at the commit its ledger pins in
+  # physical.provenance.commit (fa56a87, physical_rosmaster#47, when this
+  # reference was set). This repository's CI checks, in turn, that this file says
+  # what the ledger at `commit` says (tools/test_robot_contract_matches_simulator.py).
+  parity_check: yahboom_rosmaster_gazebo/test/sensor_contract.launch.py
 
 command:
   topic: /cmd_vel
@@ -16,6 +25,7 @@ topics:
     type: sensor_msgs/msg/JointState
     owner: yahboomcar_bringup
     required: true
+    frame_id: joint_states
     joints:
       - front_left_wheel_joint
       - front_right_wheel_joint

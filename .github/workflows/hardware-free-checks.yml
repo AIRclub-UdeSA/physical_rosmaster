@@ -36,6 +36,7 @@ jobs:
           source /opt/ros/humble/setup.bash
           apt-get update
           apt-get install -y --no-install-recommends \
+            git \
             python3-colcon-common-extensions \
             python3-rosdep
           if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
@@ -78,8 +79,37 @@ jobs:
           colcon test-result --verbose
           exit "${test_status}"
 
+      # The simulator's parity ledger, at the commit robot_contract.yaml names
+      # (simulator_reference.commit), for the contract cross-check below. After
+      # the build and colcon test, so colcon never scans it. The simulator runs
+      # this repository's contract probe in its own CI; this repository has no
+      # Gazebo, so what it can check is that its contract says what the ledger does.
+      - name: Read the simulator pin
+        id: simulator_pin
+        shell: bash
+        run: |
+          sha="$(python3 -c "import yaml; print(yaml.safe_load(open('config/robot_contract.yaml'))['simulator_reference']['commit'])")"
+          if [[ ! "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "simulator_reference.commit is not a full SHA: '${sha}'" >&2
+            exit 1
+          fi
+          echo "simulator pin: ${sha}"
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Fetch the simulator's parity ledger at the pin
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: AIRclub-UdeSA/yahboom_rosmaster
+          ref: ${{ steps.simulator_pin.outputs.sha }}
+          path: simulator_ledger
+          sparse-checkout: yahboom_rosmaster_gazebo/config/real_robot_contract.yaml
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Run standalone tool tests
         shell: bash
+        env:
+          SIMULATOR_LEDGER: ${{ github.workspace }}/simulator_ledger/yahboom_rosmaster_gazebo/config/real_robot_contract.yaml
         # tools/test_rosmaster_v339_pty.py is intentionally excluded: it only
         # runs against the real, unvendored Rosmaster_Lib.py via
         # ROSMASTER_V339_SOURCE, which is not available here for licensing
@@ -92,6 +122,7 @@ jobs:
             tools/test_motor_live_loss_probe.py \
             tools/test_motor_live_loss_ros_smoke.py \
             tools/test_physical_contract_probe.py \
+            tools/test_robot_contract_matches_simulator.py \
             tools/test_sensor_capability_probe.py \
             tools/test_safe_cmd_vel_pulse.py
 

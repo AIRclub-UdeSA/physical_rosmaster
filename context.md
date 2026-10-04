@@ -6,7 +6,7 @@ This is the physical ROSMASTER X3 hardware platform. Its design target is simula
 
 Default bringup may provide drivers, sensors, preprocessing, wheel odometry, TF, and hardware health. It must not provide autonomous behavior, localization, mapping, navigation, an EKF, tracking, following, avoidance, or any `/cmd_vel` publisher.
 
-External projects own all behavior and run on top of the same public topics and frames used by simulator commit `772ba25`.
+External projects own all behavior and run on top of the same public topics and frames used by simulator commit `f365005`.
 
 ## Current Git state
 
