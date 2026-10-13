@@ -98,9 +98,10 @@ imports it. That is a compatibility/version gate, not supply-chain attestation.
 - **Close the remaining validation gates.** `x3-c` already passed the core
   robot deployment, startup-absence/restoration/live-loss sequence, and a
   qualitative floor pass; autostart is separately installed and
-  reboot-validated. Still open: the full 3-rep measured floor protocol with
-  external measurement, operator-tool (joystick/keyboard/calibration) checks,
-  and a simulator/physical consumer-parity proof. Use
+  reboot-validated on `x3-c` and `mikey`. Still open: the full 3-rep measured
+  floor protocol with external measurement, operator-tool
+  (joystick/keyboard/calibration) checks, and a simulator/physical
+  consumer-parity proof. Use
   [Rollout status](README.md#rollout-status),
   [the robot checklist](docs/robot_side_verification_todo.md), and
   [odometry validation](docs/odometry_validation.md).
