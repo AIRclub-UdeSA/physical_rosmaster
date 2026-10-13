@@ -208,9 +208,21 @@ untested.
   because the container's PID 1 is `bash`. `rosdep install` removed the image's
   `systemctl` replacement package while installing `systemd`.
 
+## Stop path
+
+`sudo systemctl stop rosmaster-platform.service` on the running platform
+returned in about 6 s. `rosmaster-platform-stop` logged `Clean stop: all
+platform processes exited on SIGTERM`; afterwards no platform process was left
+in the container, `ros2 node list` was empty, nothing held `/dev/robot/motor`
+or `/dev/robot/lidar`, and the container kept running. The same clean stop was
+logged on both shutdowns.
+
+The unit then reports `failed`, not `inactive`: its main process
+(`docker exec`) exits with status 143 on SIGTERM, which systemd counts as a
+failure because the unit does not list it in `SuccessExitStatus`. The stop
+itself is clean; only the reported state is misleading.
+
 ## Not tested
 
 - A second cold boot, to tell whether the ready-service failure repeats.
-- The stop path on its own (`systemctl stop` and `rosmaster-platform-stop`);
-  it ran only as part of the shutdowns, where it logged a clean stop.
 - Floor trials, and the operator tools (joystick, keyboard, calibration).
