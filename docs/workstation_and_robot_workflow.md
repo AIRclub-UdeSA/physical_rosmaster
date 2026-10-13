@@ -114,7 +114,7 @@ Expected paths:
 - repository: `/root/yahboomcar_ws/src/physical_rosmaster`;
 - external camera driver: `/root/yahboomcar_ws/src/ros2_astra_camera`.
 
-Before changing an existing workspace, put source backups outside `/root/yahboomcar_ws`. A backup containing packages anywhere under the workspace causes duplicate package discovery.
+Before changing an existing workspace, put source backups outside `/root/yahboomcar_ws`. A backup containing packages anywhere under the workspace causes duplicate package discovery. The same applies to the factory Humble image's own populated `/root/yahboomcar_ws`: on a new robot, move it outside the workspace (for example to `/root/rosmaster-recovery-backups/yahboomcar_ws.factory-<date>`) before the first clone, as in [the setup guide](setup_guide_ros2_humble_autostart.md#7-clone-and-build).
 
 Before importing or building, verify the checkout is clean, on `main`, and
 matches the remote:
@@ -218,13 +218,18 @@ ros2 run astra_camera list_devices_node
 Copy and edit [../config/99-rosmaster-x3.rules.example](../config/99-rosmaster-x3.rules.example) on the robot host. Never deploy placeholder serial values. Reload rules, reconnect hardware, and verify aliases before starting ROS.
 
 Use a unique device serial when available. If the CH340 motor controller has no
-serial, bind its alias to a dedicated physical USB port with the template's
-`KERNELS` fallback and verify that port after reboot.
+serial (as on `x3-c` and `mikey`), its `/dev/serial/by-id` name is only the
+generic `usb-1a86_USB_Serial-if00-port0`, which is not unique to the unit. Bind
+its alias to a dedicated physical USB port with the template's `KERNELS`
+fallback, verify that port after reboot, and use `/dev/robot/motor` as the motor
+path.
 
-Configure the container:
+Configure the container shell used for launch (`export` in a host shell does not
+reach `docker exec`; pass the variables with `docker exec -e ...` or `export`
+them inside the container shell):
 
 ```bash
-export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
+export ROSMASTER_MOTOR_PORT=/dev/robot/motor   # or the /dev/serial/by-id/... path of a controller with a unique serial
 export ROSMASTER_LIDAR_PORT=/dev/robot/lidar
 export ROSMASTER_ASTRA_SERIAL="REPLACE_WITH_ASTRA_SERIAL"
 ```
@@ -252,11 +257,12 @@ a successful write call or stop log.
 ## Manual validation order
 
 Use [robot_side_verification_todo.md](robot_side_verification_todo.md) as the
-authoritative, evidence-backed checklist for the first robot acceptance run.
-Runtime commit `a08b097` has not yet passed this robot-side checklist. Deploy
-and record one clean branch head at an exact reviewed full SHA containing both
-that runtime commit and validation-tooling commit `bc965a6`, rather than
-treating older `x3-c` evidence as acceptance of the new transport behavior.
+authoritative, evidence-backed checklist for a platform-level acceptance run.
+Runtime commit `a08b097` and validation-tooling commit `bc965a6` passed it on
+`x3-c` on 2026-09-02 at exact reviewed head `e34f8a3` (see
+[Rollout status](../README.md#rollout-status)), so an additional robot running
+`main` does not repeat it; it follows
+[the setup guide](setup_guide_ros2_humble_autostart.md) instead.
 
 Start the platform manually:
 
@@ -287,7 +293,7 @@ secured, ensure that no `/cmd_vel` publisher exists, export the same
 `ROSMASTER_MOTOR_PORT` value in the probe shell, and run:
 
 ```bash
-export ROSMASTER_MOTOR_PORT="/dev/serial/by-id/REPLACE_WITH_MOTOR_CONTROLLER_ID"
+export ROSMASTER_MOTOR_PORT=/dev/robot/motor   # or this robot's /dev/serial/by-id/... path
 mkdir -p /root/rosmaster-recovery-evidence
 python3 tools/motor_live_loss_probe.py \
   --device "$ROSMASTER_MOTOR_PORT" \
@@ -350,11 +356,13 @@ Use `camera_calibration` only if the device-reported intrinsics fail the contrac
 
 The old autostart instructions targeted separate camera/LiDAR processes, unstable device names, and the former EKF graph. They are obsolete.
 
-Do not point host systemd or `/root/auto_start.sh` at this branch. Autostart
-stays blocked until one X3 passes the complete contract, no-motion live-loss
-and restoration checks, lifted motion, floor motion, and simulator/physical
-consumer acceptance. Bounded active-link-loss stop behavior is a documented,
-owner-accepted exception rather than a required pass — see
+Do not point host systemd or `/root/auto_start.sh` at this branch, and never
+enable the factory services in the Humble image (`my_ros_service.service`,
+Supervisor configs, `/root/run_handle.sh`). Versioned autostart is accepted for
+this stack and is installed from [autostart_setup.md](autostart_setup.md): the
+files are in [`config/`](../config/), and it was installed and reboot-validated
+on `x3-c` and `mikey`. It starts only the strict platform and a one-shot
+boot-ready check, never joystick, keyboard, calibration, or project behavior.
+Bounded active-link-loss stop behavior is a documented, owner-accepted
+exception rather than a required pass — see
 [the known-issue writeup](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md).
-Preparing versioned autostart files is a later project, not part of the current
-manual-validation architecture.

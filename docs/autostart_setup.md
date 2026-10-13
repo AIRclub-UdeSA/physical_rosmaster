@@ -33,23 +33,37 @@ rules template works.
 
 ## 2. Discover per-robot values
 
-Follow [setup_guide_ros2_humble_autostart.md section 3](setup_guide_ros2_humble_autostart.md#3-identify-this-robots-hardware)
+Follow [setup_guide_ros2_humble_autostart.md section 8](setup_guide_ros2_humble_autostart.md#8-identify-this-robots-hardware)
 to record the motor, LiDAR, and Astra identities for this robot. You need:
 
-- the motor serial path (prefer `/dev/serial/by-id/...`; fall back to the
-  udev-aliased `/dev/robot/motor` only for controllers with no distinguishable
-  serial);
+- the motor path (prefer `/dev/serial/by-id/...` when the controller has a real
+  unique serial; use the udev-aliased `/dev/robot/motor` for controllers with
+  none — a serial-less CH340 only shows the generic, non-unique by-id name
+  `usb-1a86_USB_Serial-if00-port0`, which is the case on both `x3-c` and
+  `mikey`);
 - the LiDAR path, typically the udev-aliased `/dev/robot/lidar`;
 - the Astra serial number, from `ros2 run astra_camera list_devices_node`
   inside the container.
 
 ## 3. Install
 
-From a workstation with the repository checked out, or from a clone on the
-robot's host — paths below assume the files were copied to
-`/tmp/rosmaster-autostart-install/` first (e.g. with `scp`):
+The files live in this repository's `config/` directory, and the repository
+is normally cloned only inside the container, not on the robot's host. From a
+workstation with the repository checked out, copy them to the robot's
+host and work from there:
 
 ```bash
+# On the workstation, from the repository root:
+ssh pi@<robot-ip> 'mkdir -p /tmp/rosmaster-autostart-install'
+scp config/rosmaster-*.sh config/rosmaster-*.service.example \
+  pi@<robot-ip>:/tmp/rosmaster-autostart-install/
+ssh pi@<robot-ip>
+```
+
+Then, on the robot's host:
+
+```bash
+cd /tmp/rosmaster-autostart-install
 sudo mkdir -p /etc/rosmaster
 
 sudo install -m 0755 -o root -g root rosmaster-disk-guard.sh /usr/local/sbin/rosmaster-disk-guard
@@ -63,7 +77,8 @@ sudo install -m 0644 -o root -g root rosmaster-platform-ready.service.example /e
 ```
 
 Create the real environment file (replace every value with what you recorded
-in step 2; `ROSMASTER_CONTAINER_NAME` and `ROSMASTER_WORKSPACE` only need to
+in step 2, with `ROSMASTER_MOTOR_PORT=/dev/robot/motor` for a serial-less CH340;
+`ROSMASTER_CONTAINER_NAME` and `ROSMASTER_WORKSPACE` only need to
 change if this robot's container name or workspace path differs from the
 documented defaults):
 
