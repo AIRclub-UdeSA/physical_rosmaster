@@ -20,7 +20,7 @@ neither is required reading to bring up a new robot.
 
 Work through the sections in order on a factory card. If a unit was already
 partly set up, each section starts with a check so you can skip what is done.
-`x3-c` and `mikey` were both set up this way; the `x3-c` rebuild is recorded in
+`x3-c`, `mikey`, `raphael` and `leo` were all set up this way; the `x3-c` rebuild is recorded in
 [robot_artifacts/pr3_recovery_session_2026-08-30.md](../robot_artifacts/pr3_recovery_session_2026-08-30.md).
 
 ## 1. Preconditions
@@ -66,7 +66,7 @@ host keys mean one robot's key identifies all of them. Set a unique identity
 before anything else:
 
 ```bash
-# Pick a name nobody else uses (the fleet so far: x3-c, mikey).
+# Pick a name nobody else uses (the fleet so far: x3-c, mikey, raphael, leo).
 sudo hostnamectl set-hostname <name>
 sudo sed -i 's/^127\.0\.1\.1\([[:space:]]\+\)yahboom$/127.0.1.1\1<name>/' /etc/hosts
 
@@ -87,7 +87,7 @@ sudo timedatectl set-timezone America/Argentina/Buenos_Aires
 ```
 
 Also pick this robot's `ROS_DOMAIN_ID` now, so two robots on the same network
-don't share a graph (`x3-c` uses 11, `mikey` uses 13). You need it in
+don't share a graph (`raphael` uses 10, `x3-c` 11, `leo` 12, `mikey` 13). You need it in
 section 5.
 
 The factory `/etc/hosts` also pins `raw.githubusercontent.com` to
@@ -206,6 +206,28 @@ docker run -dit --name rosmaster_humble --net=host --privileged \
 The container's only persistent process is `bash` (PID 1). The platform runs
 inside it through `docker exec`, so a missing `ROS_DOMAIN_ID` here is easy to
 miss later; check `docker exec rosmaster_humble printenv ROS_DOMAIN_ID`.
+
+The image's `/root/.bashrc` overrides that value with `export ROS_DOMAIN_ID=20`
+and sources the factory `~/imu_ws`, `~/gmapping_ws` and `~/yahboomcar_ws`
+overlays. The autostart scripts use non-interactive `bash -lc`, which stops
+before those lines, but an interactive `docker exec -it rosmaster_humble bash`
+(or a Dev Containers attach) lands on domain 20 and won't see the robot's
+topics. Keep a copy, then comment those lines out and source the workspace
+after `/opt/ros/humble` instead:
+
+```bash
+docker exec rosmaster_humble bash -c '
+set -e
+mkdir -p /root/rosmaster-recovery-backups
+cp -a /root/.bashrc /root/rosmaster-recovery-backups/bashrc.factory-$(date +%F)
+sed -i -e "s|^export ROS_DOMAIN_ID=20$|# export ROS_DOMAIN_ID=20|" \
+  -e "s|^source ~/imu_ws/install/setup.bash$|# &|" \
+  -e "s|^source ~/gmapping_ws/install/setup.bash$|# &|" \
+  -e "s|^source ~/yahboomcar_ws/install/setup.bash$|# &|" /root/.bashrc
+echo "[ -f /root/yahboomcar_ws/install/setup.bash ] && source /root/yahboomcar_ws/install/setup.bash" >> /root/.bashrc
+'
+docker exec rosmaster_humble bash -ic 'echo $ROS_DOMAIN_ID'   # this robot's id, not 20
+```
 
 Run every ROS command on the robot inside this container, for example with
 `docker exec -it rosmaster_humble bash`. The host has no ROS install, and a
