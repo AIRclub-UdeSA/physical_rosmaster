@@ -158,8 +158,46 @@ so the robot prefers `Privada` whenever it is in range. As the last step of
 the session, after checking that `Privada` has its password stored, the home
 profile was scheduled for deletion so its password does not stay on the robot
 (`nmcli connection delete`, logged to `/var/log/leo-home-wifi-delete.log`).
-The robot dropped off the home network seconds later, as expected; the
-deletion itself is confirmed on the first boot on `Privada`.
+The robot dropped off the home network seconds later, as expected. On the
+first boot on `Privada` (2026-10-14) the profile was already gone: `nmcli`
+does not list it, there is no file for it in
+`/etc/NetworkManager/system-connections/`, and the deletion log reports it
+`successfully deleted`. Nothing had to be deleted that day. The only other
+file in that directory is an empty `Wi-Fi connection 1.nmconnection` from the
+factory image (December 2023), which `NetworkManager` does not load.
+
+## First boot on the faculty network (2026-10-14)
+
+Pass on the one allowed cold restart. Both boots connected to `Privada`
+(`Privada:wlan0` active) without touching any cable, and
+`rosmaster-platform.service` was active both times. The shutdown before them,
+on 2026-10-13, logged `Clean stop: all platform processes exited on SIGTERM`
+and `Journal stopped`.
+
+- First boot (operator switched it on at about 14:20): the operator did not
+  hear the signal. The ready service ran once and failed on the point cloud
+  rate floor, the same known failure as in
+  [Point cloud rate floor](#point-cloud-rate-floor):
+  `Physical contract FAILED: /cam_1/depth/color/points: measured 2.73 Hz outside 3.0..40.0 Hz`.
+  All four USB devices were present. The log was kept on the robot as
+  `~/leo-falla-1.log`, and the robot was restarted cold (clean `poweroff`,
+  power switch off about 10 s, back on).
+- Second boot (switched on at about 14:26): the operator heard the beeps and
+  saw the lights. One complete run of the ready service:
+
+  ```text
+  [27.88] Physical contract PASSED
+  [43.22] Sent boot-ready buzzer + RGBLight (transient=2 for 3s, then steady=6)
+  [43.23] rosmaster-platform-ready.service: Deactivated successfully.
+  ```
+
+  `rosmaster-wait-for-platform` reported all devices at 16.84 s and the NTP
+  step came at 34.52 s, after the probe. All four USB devices
+  (`1a86:7523`, `10c4:ea60`, `2bc5:060f`, `2bc5:050f`) were present,
+  `/dev/robot/motor` and `/dev/robot/lidar` existed, `ros2 node list` showed
+  all seven nodes on the first try, and the container reported
+  `ROS_DOMAIN_ID` 12. The battery read 10.7 V, `vcgencmd get_throttled`
+  returned `0x0`, and the root filesystem was 58% used.
 
 ## Factory items left in place
 
@@ -179,9 +217,6 @@ deletion itself is confirmed on the first boot on `Privada`.
 
 ## Not tested
 
-- The first boot on the faculty network (`Privada`) and the confirmation that
-  the home network profile is gone. Both are pending in the PR that records
-  this deployment and will be added here before it is merged.
 - The stop path on its own; it ran as part of both shutdowns and logged a
   clean stop each time.
 - Floor trials, and the operator tools (joystick, keyboard, calibration).
