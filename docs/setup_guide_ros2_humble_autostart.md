@@ -45,6 +45,20 @@ If an old service is active, stop it using the robot's existing administration
 procedure before opening serial devices manually. Section 4 covers the factory
 services that are known to do this.
 
+Inspect storage before cloning, building, or changing Docker state:
+
+```bash
+df -h /
+docker system df
+docker ps -a --size
+```
+
+Do not use aggressive pruning as the first response to low disk space. An
+active container or image can consume most of the disk while Docker reports no
+reclaimable space, and `docker system prune -a` does not shrink an active
+container's writable layer. Diagnose the actual consumer first; see
+[Root filesystem full causing LightDM login loop and Docker growth](troubleshooting/known_issues/root-filesystem-full-login-loop.md).
+
 ### Put the robot on the WiFi
 
 A factory card does not join your network by itself, so this step is done on
@@ -64,25 +78,28 @@ applet, before anything over SSH:
    this repository.
 5. Go to **Edit Connections → `<TARGET_WIFI_SSID>` → General** and check
    **Connect automatically with priority**.
-6. Reboot and confirm the robot joins `<TARGET_WIFI_SSID>` by itself.
+6. Turn WiFi power saving off for that connection. With it on, the Pi adds
+   100-300 ms ping spikes:
+
+   ```bash
+   sudo nmcli connection modify "<TARGET_WIFI_SSID>" 802-11-wireless.powersave 2
+   ```
+
+7. Reboot and confirm the robot joins `<TARGET_WIFI_SSID>` by itself.
+8. List the saved connections and check that `<TARGET_WIFI_SSID>` connects
+   automatically with the highest priority, and the factory one does not:
+
+   ```bash
+   nmcli -f NAME,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show
+   ```
+
+   A second profile for the same network (for example one saved without the
+   password) can shadow the working one; delete it, along with any network
+   used only during setup, with `sudo nmcli connection delete "<NAME>"`.
 
 Read the robot's IP on its own terminal with `hostname -I`. Check it again
 after the reboots in sections 2 and 3: a new `machine-id` can give the robot a
 different DHCP address.
-
-Inspect storage before cloning, building, or changing Docker state:
-
-```bash
-df -h /
-docker system df
-docker ps -a --size
-```
-
-Do not use aggressive pruning as the first response to low disk space. An
-active container or image can consume most of the disk while Docker reports no
-reclaimable space, and `docker system prune -a` does not shrink an active
-container's writable layer. Diagnose the actual consumer first; see
-[Root filesystem full causing LightDM login loop and Docker growth](troubleshooting/known_issues/root-filesystem-full-login-loop.md).
 
 ## 2. Give the robot its own identity
 
