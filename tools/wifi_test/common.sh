@@ -1,7 +1,9 @@
 # Shared settings for the WiFi test scripts. Sourced, not run.
 #
-# Override per run: ROBOT=leo.local ROS_DOMAIN_ID=12 bash link_check.sh
-ROBOT="${ROBOT:-raphael.local}"
+# No defaults: a wrong domain drives another robot. Set both per run:
+#   ROBOT=raphael.local ROS_DOMAIN_ID=10 bash link_check.sh
+: "${ROBOT:?set ROBOT, e.g. ROBOT=raphael.local}"
+: "${ROS_DOMAIN_ID:?set ROS_DOMAIN_ID to the robot domain, e.g. ROS_DOMAIN_ID=10}"
 CONTAINER="${CONTAINER:-rosmaster_humble}"
 WIFI_TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOLS_DIR="$(dirname "$WIFI_TEST_DIR")"
@@ -11,7 +13,7 @@ mkdir -p "$RESULTS"
 
 # shellcheck disable=SC1091
 source /opt/ros/humble/setup.bash
-export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-10}"
+export ROS_DOMAIN_ID
 export PYTHONUNBUFFERED=1
 unset ROS_LOCALHOST_ONLY
 

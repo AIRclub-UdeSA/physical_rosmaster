@@ -19,6 +19,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.qos import qos_profile_sensor_data
+from rclpy.signals import SignalHandlerOptions
 
 PULSE_S = 1.5
 STOP_WINDOW_S = 2.0
@@ -42,7 +43,9 @@ def main(argv=None):
     moving = 0.3 * args.speed  # /odom vx that counts as "moving"
     still = 0.2 * moving
 
-    rclpy.init()
+    # Without rclpy's SIGINT handler, Ctrl-C reaches the finally below with the
+    # context still valid, so the zeros go out.
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = rclpy.create_node("wifi_cmd_latency")
     publisher = node.create_publisher(Twist, "/cmd_vel", 10)
     state = {"vx": None}
@@ -97,7 +100,8 @@ def main(argv=None):
             publisher.publish(zero)
             time.sleep(0.02)
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
     for name, values in (("start", starts), ("stop", stops)):
         if values:

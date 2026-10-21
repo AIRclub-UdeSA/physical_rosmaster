@@ -8,7 +8,9 @@ run: [raphael, 2026-10-16](../../robot_artifacts/raphael_router_wifi_2026-10-16.
 Every script runs on the workstation (ROS 2 Humble) and reaches the robot over
 SSH with a key (`ssh-copy-id pi@<robot>` once). Results go to
 `~/wifi_test_results` (override with `RESULTS=`). `ROBOT` and `ROS_DOMAIN_ID`
-default to `raphael.local` and `10`; set both for another robot.
+have no default; export both for the robot under test (for example
+`export ROBOT=raphael.local ROS_DOMAIN_ID=10`). `cmd_latency.sh` moves whatever
+robot is on that domain, whatever `ROBOT` says.
 
 ## What the sensors need
 
@@ -49,11 +51,14 @@ Add the network as a second connection while the robot is still reachable on
 its usual one. Never commit the network name or password.
 
 ```bash
-ssh pi@<robot> 'sudo nmcli connection add type wifi ifname wlan0 con-name router-test \
-  ssid "<SSID>" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "<PASSWORD>" \
+ssh -t pi@<robot> 'sudo nmcli --ask connection add type wifi ifname wlan0 con-name router-test \
+  ssid "<SSID>" wifi-sec.key-mgmt wpa-psk \
   connection.autoconnect yes connection.autoconnect-priority 5 \
   802-11-wireless.powersave 2'
 ```
+
+`--ask` prompts for the password, so it stays out of the shell history on both
+machines.
 
 `powersave 2` turns WiFi power saving off; with it on, the Pi adds 100-300 ms
 ping spikes. Give the usual network a higher priority so the robot keeps

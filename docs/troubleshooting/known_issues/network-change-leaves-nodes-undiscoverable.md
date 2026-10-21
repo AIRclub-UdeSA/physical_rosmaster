@@ -17,8 +17,14 @@ stays `active`, the journal shows no error, and ping, SSH and
 
 - `raphael`, ROS 2 Humble in the `rosmaster_humble` container (host
   networking), default Fast DDS, no `RMW_IMPLEMENTATION` or DDS profile set.
-- The platform started on the faculty network (`172.23.16.82`); NetworkManager
-  then moved `wlan0` to the competition router (`192.168.10.138`).
+- The platform started on the faculty network; NetworkManager then moved
+  `wlan0` to the competition router, on a different subnet.
+
+## Safety / Data-Loss Warning
+
+While the nodes are undiscoverable, no workstation can send a zero `/cmd_vel`
+to the robot. If it was moving when the network changed, only the driver's
+0.5 s `cmd_vel_timeout` stops the wheels. No data loss.
 
 ## Fast Diagnosis
 
@@ -77,6 +83,13 @@ ros2 topic echo /voltage --once    # data arrives
 Power the robot on with the network it will use already available, so the
 platform starts on its final address. At a competition: router first, then
 robots. Restart the platform after any manual network change.
+
+## Affected Robot / Incident
+
+- Robot: `raphael`, 2026-10-16, during the competition router test
+- Symptom: 0 nodes from the workstation and from inside the container after
+  `wlan0` moved from the faculty network to the router
+- Confirmed mitigation: `sudo systemctl restart rosmaster-platform.service`
 
 ## Not Tested
 
