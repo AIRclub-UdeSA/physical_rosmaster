@@ -124,7 +124,8 @@ jobs:
             tools/test_physical_contract_probe.py \
             tools/test_robot_contract_matches_simulator.py \
             tools/test_sensor_capability_probe.py \
-            tools/test_safe_cmd_vel_pulse.py
+            tools/test_safe_cmd_vel_pulse.py \
+            tools/test_ros_shutdown_listener.py
 
       - name: Upload failure diagnostics
         if: failure()

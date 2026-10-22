@@ -34,7 +34,7 @@ excluded, and the hardware-only extensions below are additional.
 | `/cam_1/color/*` | Calibrated RGB8 color image and camera info |
 | `/cam_1/depth/*` | Metric 32FC1 depth, camera info, and XYZRGB cloud |
 
-The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available. `/imu/data_raw`, the Madgwick filter's input, is published by the simulator as well.
+The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available. `/imu/data_raw`, the Madgwick filter's input, is published by the simulator as well. Outside the platform graph, an optional host listener powers the robot off on `/system/shutdown` (`std_msgs/String` equal to the robot's hostname). It isn't for team code; see [docs/autostart_setup.md section 7](docs/autostart_setup.md#7-power-off-over-ros-2-systemshutdown).
 
 ## Motor transport and failure boundary
 
@@ -166,7 +166,8 @@ python3 -m pytest -q \
   tools/test_physical_contract_probe.py \
   tools/test_robot_contract_matches_simulator.py \
   tools/test_sensor_capability_probe.py \
-  tools/test_safe_cmd_vel_pulse.py
+  tools/test_safe_cmd_vel_pulse.py \
+  tools/test_ros_shutdown_listener.py
 )
 ```
 
