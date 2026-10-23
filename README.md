@@ -36,6 +36,8 @@ excluded, and the hardware-only extensions below are additional.
 
 The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available. `/imu/data_raw`, the Madgwick filter's input, is published by the simulator as well.
 
+The hardware-only service `/base_node/reset_odom` (`std_srvs/Trigger`) zeroes the `/odom` pose, for example between runs, without restarting the platform: `ros2 service call /base_node/reset_odom std_srvs/srv/Trigger`. Call it while the robot is stationary: the zeroed pose is published with the next `joint_states`, so a moving robot reports zero plus one integration step. If the wheel encoders have not started or are stale, the pose is still zeroed, but `/odom` stays silent until they resume, and the response message says so. The `odom` → `base_footprint` transform jumps back to the origin, so restart anything that accumulates `/odom` (SLAM, an EKF) after calling it.
+
 ## Motor transport and failure boundary
 
 Runtime commit `a08b097` derives motor-controller liveness only from
