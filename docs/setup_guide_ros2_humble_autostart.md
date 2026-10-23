@@ -213,21 +213,31 @@ overlays. The autostart scripts use non-interactive `bash -lc`, which stops
 before those lines, but an interactive `docker exec -it rosmaster_humble bash`
 (or a Dev Containers attach) lands on domain 20 and won't see the robot's
 topics. Keep a copy, then comment those lines out and source the workspace
-after `/opt/ros/humble` instead:
+after `/opt/ros/humble` instead. The block matches any line that exports
+`ROS_DOMAIN_ID=20` or sources one of those overlays (with `~` or `/root`, any
+trailing text), keeps the first backup if you rerun it, and doesn't add the
+`source` line twice:
 
 ```bash
 docker exec rosmaster_humble bash -c '
 set -e
 mkdir -p /root/rosmaster-recovery-backups
-cp -a /root/.bashrc /root/rosmaster-recovery-backups/bashrc.factory-$(date +%F)
-sed -i -e "s|^export ROS_DOMAIN_ID=20$|# export ROS_DOMAIN_ID=20|" \
-  -e "s|^source ~/imu_ws/install/setup.bash$|# &|" \
-  -e "s|^source ~/gmapping_ws/install/setup.bash$|# &|" \
-  -e "s|^source ~/yahboomcar_ws/install/setup.bash$|# &|" /root/.bashrc
-echo "[ -f /root/yahboomcar_ws/install/setup.bash ] && source /root/yahboomcar_ws/install/setup.bash" >> /root/.bashrc
+b=/root/rosmaster-recovery-backups/bashrc.factory-$(date +%F)
+[ -e "$b" ] || cp -a /root/.bashrc "$b"
+sed -i -E \
+  -e "s,^[[:space:]]*export[[:space:]]+ROS_DOMAIN_ID=20\b.*,# &," \
+  -e "s,^[[:space:]]*(source|\.)[[:space:]]+(~|/root)/(imu_ws|gmapping_ws|yahboomcar_ws)/install/setup\.bash.*,# &," \
+  /root/.bashrc
+line="[ -f /root/yahboomcar_ws/install/setup.bash ] && source /root/yahboomcar_ws/install/setup.bash"
+grep -qxF "$line" /root/.bashrc || echo "$line" >> /root/.bashrc
 '
-docker exec rosmaster_humble bash -ic 'echo $ROS_DOMAIN_ID'   # this robot's id, not 20
+docker exec rosmaster_humble bash -ic 'echo "$ROS_DOMAIN_ID"; echo "$AMENT_PREFIX_PATH"'
 ```
+
+The first line should be this robot's id, not 20. `AMENT_PREFIX_PATH` should
+list the `/root/yahboomcar_ws/install/...` packages but no `imu_ws` or
+`gmapping_ws`. If a factory line has a form the patterns don't match, `sed`
+leaves it alone, so check `grep -nE 'ROS_DOMAIN_ID|_ws' /root/.bashrc` too.
 
 Run every ROS command on the robot inside this container, for example with
 `docker exec -it rosmaster_humble bash`. The host has no ROS install, and a

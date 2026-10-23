@@ -78,6 +78,13 @@ was saved to `/root/rosmaster-recovery-backups/bashrc.factory-2026-10-13` and
 those lines were commented out; the workspace is now sourced after
 `/opt/ros/humble`, only if it exists. Interactive shells now report domain 10.
 
+The exact factory lines were not captured in this record, so the setup guide's
+`sed` matches by pattern (any `export ROS_DOMAIN_ID=20` line, and any line
+sourcing those three overlays via `~` or `/root`) instead of quoting them. The
+original file is still on the robot in `/root/rosmaster-recovery-backups/`.
+After the edit the check prints `AMENT_PREFIX_PATH` as well as the domain, to
+show the `imu_ws` and `gmapping_ws` overlays are gone.
+
 ## Device identities
 
 | Device | IDs | Identity |
