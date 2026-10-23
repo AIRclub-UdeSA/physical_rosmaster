@@ -14,9 +14,11 @@ External projects own all behavior and run on top of the same public topics and 
 - recovery tag: `pre-platform-contract-cleanup`;
 - `platform/simulator-parity` merged to `main` 2026-09-03 (PR #3); `main` is
   the implementation state now;
-- autostart: accepted and enabled on `x3-c` and `mikey` (deployed
+- autostart: accepted and enabled on `x3-c`, `mikey` (deployed
   2026-10-09; see
-  [robot_artifacts/mikey_deployment_2026-10-09.md](robot_artifacts/mikey_deployment_2026-10-09.md)).
+  [robot_artifacts/mikey_deployment_2026-10-09.md](robot_artifacts/mikey_deployment_2026-10-09.md))
+  and `splinter` (deployed 2026-10-21, warm and cold boot; see
+  [robot_artifacts/splinter_deployment_2026-10-21.md](robot_artifacts/splinter_deployment_2026-10-21.md)).
   Additional robots follow
   [docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md)
   then [docs/autostart_setup.md](docs/autostart_setup.md) directly — no
