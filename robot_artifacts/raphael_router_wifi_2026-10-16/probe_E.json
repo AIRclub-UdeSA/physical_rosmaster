@@ -1,0 +1,1069 @@
+{
+  "measurement": {
+    "adapter_parameters": {
+      "cloud_decimation": 1,
+      "cloud_strip_nan": true,
+      "target_cloud_frame": "cam_1_depth_frame"
+    },
+    "camera_frame_rate_hz": 30.0,
+    "content_samples": 3,
+    "contract_probe_git_blob": "02d4e5c544bdedd14630e79f4dd12bb29206cb56",
+    "dropout_factor": 2.5,
+    "duration_s": 30.0,
+    "host": "raphael",
+    "host_uptime_s": 3104.66,
+    "mode": "concurrent",
+    "notes": {
+      "escalon": "E"
+    },
+    "per_message": false,
+    "probe_git_blob": "a572b9f92e3825a3d8a034b7612a7374ef09f89f",
+    "started_utc": "2026-10-16T20:02:39Z",
+    "topics": [
+      "/cam_1/color/image_raw",
+      "/cam_1/color/camera_info",
+      "/cam_1/depth/image_raw",
+      "/cam_1/depth/camera_info",
+      "/cam_1/depth/color/points"
+    ]
+  },
+  "topics": [
+    {
+      "active_span_s": 29.98117006199982,
+      "content": {
+        "encoding": "rgb8",
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "is_bigendian": false,
+        "payload_bytes": 230400,
+        "step": 960,
+        "width": 320
+      },
+      "content_last": {
+        "encoding": "rgb8",
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "is_bigendian": false,
+        "payload_bytes": 230400,
+        "step": 960,
+        "width": 320
+      },
+      "content_samples": 3,
+      "contract_rate_hz": {
+        "first_window_hz": 31.26531099051822,
+        "limits_hz": [
+          3.0,
+          40.0
+        ],
+        "median_hz": 14.758023257859644,
+        "min_hz": 10.026807933847945,
+        "p05_hz": 14.673710283447267,
+        "window_messages": 5,
+        "windows": 531,
+        "windows_outside_limits": 0
+      },
+      "dropouts": {
+        "count": 0,
+        "estimated_missed_messages": 0,
+        "threshold_ms": 144.57141874970603,
+        "worst_gap_ms": null
+      },
+      "frame_cadence": {
+        "delivered_fraction": 0.5946547884187082,
+        "frame_rate_hz": 30.0,
+        "frames_per_gap": {
+          "1": 190,
+          "2": 326,
+          "3": 17,
+          "5": 1
+        },
+        "off_grid_gaps": 0,
+        "skipped_frames": 364
+      },
+      "latency_ms": {
+        "count": 535,
+        "max": 277.2555351257324,
+        "mean": 157.5552557116357,
+        "median": 161.8492603302002,
+        "min": 41.39995574951172,
+        "p95": 181.5476894378662,
+        "p99": 197.8207969665527,
+        "stddev": 25.3584064242459
+      },
+      "latency_note": "receive clock minus header.stamp; valid only when measured on the publishing host or against a synchronized clock",
+      "message_count": 535,
+      "observed_duration_s": 30.0,
+      "other_subscriber_count": 1,
+      "other_subscribers": [
+        {
+          "namespace": "/",
+          "node": "rviz"
+        }
+      ],
+      "payload_bytes": {
+        "count": 535,
+        "max": 230400.0,
+        "mean": 230400.0,
+        "median": 230400.0,
+        "min": 230400.0,
+        "p95": 230400.0,
+        "p99": 230400.0,
+        "stddev": 0.0
+      },
+      "period_ms": {
+        "count": 534,
+        "max": 98.42098300032376,
+        "mean": 56.144513224718764,
+        "median": 57.82856749988241,
+        "min": 7.605024999975285,
+        "p95": 76.97017575005701,
+        "p99": 87.99496118016573,
+        "stddev": 15.101432974177184
+      },
+      "publisher_count": 1,
+      "publisher_qos": [
+        {
+          "depth": 0,
+          "durability": "VOLATILE",
+          "history": "UNKNOWN",
+          "namespace": "_NODE_NAMESPACE_UNKNOWN_",
+          "node": "_NODE_NAME_UNKNOWN_",
+          "reliability": "BEST_EFFORT"
+        }
+      ],
+      "rate_hz": 17.811179446823125,
+      "rate_hz_over_window": 17.833333333333332,
+      "stamp_period_ms": {
+        "count": 534,
+        "max": 166.78595542907715,
+        "mean": 56.045732694618714,
+        "median": 64.1108751296997,
+        "min": 30.45344352722168,
+        "p95": 68.81322860717773,
+        "p99": 100.07245779037476,
+        "stddev": 18.432379196032283
+      },
+      "topic": "/cam_1/color/image_raw",
+      "type": "Image"
+    },
+    {
+      "active_span_s": 29.91975744299998,
+      "content": {
+        "binning": [
+          0,
+          0
+        ],
+        "calibrated": true,
+        "d": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "distortion_model": "plumb_bob",
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "intrinsics": {
+          "cx": 159.94406127929688,
+          "cy": 119.57280731201172,
+          "fx": 271.5863342285156,
+          "fy": 271.5863342285156,
+          "horizontal_fov_deg": 61.007336975948824,
+          "vertical_fov_deg": 47.676328143978054
+        },
+        "k": [
+          271.5863342285156,
+          0.0,
+          159.94406127929688,
+          0.0,
+          271.5863342285156,
+          119.57280731201172,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "p": [
+          271.5863342285156,
+          0.0,
+          159.94406127929688,
+          0.0,
+          0.0,
+          271.5863342285156,
+          119.57280731201172,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "roi": {
+          "do_rectify": false,
+          "height": 0,
+          "width": 0,
+          "x_offset": 0,
+          "y_offset": 0
+        },
+        "width": 320
+      },
+      "content_last": {
+        "binning": [
+          0,
+          0
+        ],
+        "calibrated": true,
+        "d": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "distortion_model": "plumb_bob",
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "intrinsics": {
+          "cx": 159.94406127929688,
+          "cy": 119.57280731201172,
+          "fx": 271.5863342285156,
+          "fy": 271.5863342285156,
+          "horizontal_fov_deg": 61.007336975948824,
+          "vertical_fov_deg": 47.676328143978054
+        },
+        "k": [
+          271.5863342285156,
+          0.0,
+          159.94406127929688,
+          0.0,
+          271.5863342285156,
+          119.57280731201172,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "p": [
+          271.5863342285156,
+          0.0,
+          159.94406127929688,
+          0.0,
+          0.0,
+          271.5863342285156,
+          119.57280731201172,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "roi": {
+          "do_rectify": false,
+          "height": 0,
+          "width": 0,
+          "x_offset": 0,
+          "y_offset": 0
+        },
+        "width": 320
+      },
+      "content_samples": 3,
+      "contract_rate_hz": {
+        "first_window_hz": 31.27043912622083,
+        "limits_hz": [
+          3.0,
+          40.0
+        ],
+        "median_hz": 14.735495265668153,
+        "min_hz": 10.003944998986322,
+        "p05_hz": 14.6947598620136,
+        "window_messages": 5,
+        "windows": 530,
+        "windows_outside_limits": 0
+      },
+      "dropouts": {
+        "count": 0,
+        "estimated_missed_messages": 0,
+        "threshold_ms": 144.9530424997647,
+        "worst_gap_ms": null
+      },
+      "frame_cadence": {
+        "delivered_fraction": 0.5942028985507246,
+        "frame_rate_hz": 30.0,
+        "frames_per_gap": {
+          "1": 192,
+          "2": 318,
+          "3": 23
+        },
+        "off_grid_gaps": 0,
+        "skipped_frames": 364
+      },
+      "latency_ms": {
+        "count": 534,
+        "max": 189.68820571899414,
+        "mean": 145.12461222959368,
+        "median": 148.68175983428955,
+        "min": 17.711639404296875,
+        "p95": 167.98720359802246,
+        "p99": 172.13169813156125,
+        "stddev": 24.391439402758145
+      },
+      "latency_note": "receive clock minus header.stamp; valid only when measured on the publishing host or against a synchronized clock",
+      "message_count": 534,
+      "observed_duration_s": 30.0,
+      "other_subscriber_count": 0,
+      "other_subscribers": [],
+      "period_ms": {
+        "count": 533,
+        "max": 98.39989100009916,
+        "mean": 56.13462934896807,
+        "median": 57.98121699990588,
+        "min": 7.9862470001899055,
+        "p95": 77.36206280005717,
+        "p99": 88.41958199996945,
+        "stddev": 15.181424709392994
+      },
+      "publisher_count": 1,
+      "publisher_qos": [
+        {
+          "depth": 0,
+          "durability": "VOLATILE",
+          "history": "UNKNOWN",
+          "namespace": "_NODE_NAMESPACE_UNKNOWN_",
+          "node": "_NODE_NAME_UNKNOWN_",
+          "reliability": "BEST_EFFORT"
+        }
+      ],
+      "rate_hz": 17.814315541007186,
+      "rate_hz_over_window": 17.8,
+      "stamp_period_ms": {
+        "count": 533,
+        "max": 100.87943077087402,
+        "mean": 56.088456964403335,
+        "median": 64.1019344329834,
+        "min": 30.45344352722168,
+        "p95": 68.79215240478516,
+        "p99": 100.03381729125977,
+        "stddev": 18.53289588919988
+      },
+      "topic": "/cam_1/color/camera_info",
+      "type": "CameraInfo"
+    },
+    {
+      "active_span_s": 29.91961467200008,
+      "content": {
+        "depth": {
+          "max_m": 6.065000057220459,
+          "median_m": 2.747000217437744,
+          "min_m": 0.8570000529289246,
+          "nan_fraction": 0.5194270833333333,
+          "p05_m": 0.9810000658035278,
+          "p95_m": 5.488000392913818,
+          "pixel_count": 76800,
+          "unit": "metre",
+          "valid_fraction": 0.4805729166666667,
+          "zero_fraction": 0.0
+        },
+        "encoding": "32FC1",
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "is_bigendian": false,
+        "payload_bytes": 307200,
+        "step": 1280,
+        "width": 320
+      },
+      "content_last": {
+        "depth": {
+          "max_m": 6.9110002517700195,
+          "median_m": 2.9580001831054688,
+          "min_m": 0.8810000419616699,
+          "nan_fraction": 0.5172265625,
+          "p05_m": 0.9980000257492065,
+          "p95_m": 5.577000141143799,
+          "pixel_count": 76800,
+          "unit": "metre",
+          "valid_fraction": 0.4827734375,
+          "zero_fraction": 0.0
+        },
+        "encoding": "32FC1",
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "is_bigendian": false,
+        "payload_bytes": 307200,
+        "step": 1280,
+        "width": 320
+      },
+      "content_samples": 3,
+      "contract_rate_hz": {
+        "first_window_hz": 29.74430544918163,
+        "limits_hz": [
+          3.0,
+          40.0
+        ],
+        "median_hz": 15.007501418241416,
+        "min_hz": 9.978811432214902,
+        "p05_hz": 14.966171554973206,
+        "window_messages": 5,
+        "windows": 530,
+        "windows_outside_limits": 0
+      },
+      "dropouts": {
+        "count": 0,
+        "estimated_missed_messages": 0,
+        "threshold_ms": 145.10141750065486,
+        "worst_gap_ms": null
+      },
+      "frame_cadence": {
+        "delivered_fraction": 0.5948660714285714,
+        "frame_rate_hz": 30.0,
+        "frames_per_gap": {
+          "1": 190,
+          "2": 323,
+          "3": 20
+        },
+        "off_grid_gaps": 0,
+        "skipped_frames": 363
+      },
+      "latency_ms": {
+        "count": 534,
+        "max": 198.36115837097168,
+        "mean": 146.51352055510333,
+        "median": 151.1514186859131,
+        "min": 21.77262306213379,
+        "p95": 168.03580522537231,
+        "p99": 173.22206258773798,
+        "stddev": 24.65616601652757
+      },
+      "latency_note": "receive clock minus header.stamp; valid only when measured on the publishing host or against a synchronized clock",
+      "message_count": 534,
+      "observed_duration_s": 30.0,
+      "other_subscriber_count": 0,
+      "other_subscribers": [],
+      "payload_bytes": {
+        "count": 534,
+        "max": 307200.0,
+        "mean": 307200.0,
+        "median": 307200.0,
+        "min": 307200.0,
+        "p95": 307200.0,
+        "p99": 307200.0,
+        "stddev": 0.0
+      },
+      "period_ms": {
+        "count": 533,
+        "max": 98.5116450001442,
+        "mean": 56.134361485928856,
+        "median": 58.040567000261944,
+        "min": 8.118906999698083,
+        "p95": 77.55053859973486,
+        "p99": 88.85595020019535,
+        "stddev": 15.18785534775425
+      },
+      "publisher_count": 1,
+      "publisher_qos": [
+        {
+          "depth": 0,
+          "durability": "VOLATILE",
+          "history": "UNKNOWN",
+          "namespace": "_NODE_NAMESPACE_UNKNOWN_",
+          "node": "_NODE_NAME_UNKNOWN_",
+          "reliability": "BEST_EFFORT"
+        }
+      ],
+      "rate_hz": 17.814400547704974,
+      "rate_hz_over_window": 17.8,
+      "stamp_period_ms": {
+        "count": 533,
+        "max": 100.42333602905273,
+        "mean": 56.04054467092088,
+        "median": 66.5736198425293,
+        "min": 32.24682807922363,
+        "p95": 67.00029373168945,
+        "p99": 100.20516395568848,
+        "stddev": 18.00167392696455
+      },
+      "topic": "/cam_1/depth/image_raw",
+      "type": "Image"
+    },
+    {
+      "active_span_s": 29.91815074499982,
+      "content": {
+        "binning": [
+          0,
+          0
+        ],
+        "calibrated": true,
+        "d": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "distortion_model": "plumb_bob",
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "intrinsics": {
+          "cx": 159.94406127929688,
+          "cy": 119.57280731201172,
+          "fx": 271.5863342285156,
+          "fy": 271.5863342285156,
+          "horizontal_fov_deg": 61.007336975948824,
+          "vertical_fov_deg": 47.676328143978054
+        },
+        "k": [
+          271.5863342285156,
+          0.0,
+          159.94406127929688,
+          0.0,
+          271.5863342285156,
+          119.57280731201172,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "p": [
+          271.5863342285156,
+          0.0,
+          159.94406127929688,
+          0.0,
+          0.0,
+          271.5863342285156,
+          119.57280731201172,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "roi": {
+          "do_rectify": false,
+          "height": 0,
+          "width": 0,
+          "x_offset": 0,
+          "y_offset": 0
+        },
+        "width": 320
+      },
+      "content_last": {
+        "binning": [
+          0,
+          0
+        ],
+        "calibrated": true,
+        "d": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "distortion_model": "plumb_bob",
+        "frame_id": "cam_1_color_optical_frame",
+        "height": 240,
+        "intrinsics": {
+          "cx": 159.94406127929688,
+          "cy": 119.57280731201172,
+          "fx": 271.5863342285156,
+          "fy": 271.5863342285156,
+          "horizontal_fov_deg": 61.007336975948824,
+          "vertical_fov_deg": 47.676328143978054
+        },
+        "k": [
+          271.5863342285156,
+          0.0,
+          159.94406127929688,
+          0.0,
+          271.5863342285156,
+          119.57280731201172,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "p": [
+          271.5863342285156,
+          0.0,
+          159.94406127929688,
+          0.0,
+          0.0,
+          271.5863342285156,
+          119.57280731201172,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "roi": {
+          "do_rectify": false,
+          "height": 0,
+          "width": 0,
+          "x_offset": 0,
+          "y_offset": 0
+        },
+        "width": 320
+      },
+      "content_samples": 3,
+      "contract_rate_hz": {
+        "first_window_hz": 29.74430544918163,
+        "limits_hz": [
+          3.0,
+          40.0
+        ],
+        "median_hz": 15.006400692662996,
+        "min_hz": 10.005806477777222,
+        "p05_hz": 14.966027367932776,
+        "window_messages": 5,
+        "windows": 530,
+        "windows_outside_limits": 0
+      },
+      "dropouts": {
+        "count": 0,
+        "estimated_missed_messages": 0,
+        "threshold_ms": 145.25965000075303,
+        "worst_gap_ms": null
+      },
+      "frame_cadence": {
+        "delivered_fraction": 0.5942028985507246,
+        "frame_rate_hz": 30.0,
+        "frames_per_gap": {
+          "1": 187,
+          "2": 328,
+          "3": 18
+        },
+        "off_grid_gaps": 0,
+        "skipped_frames": 364
+      },
+      "latency_ms": {
+        "count": 534,
+        "max": 183.38847160339355,
+        "mean": 147.37626541866345,
+        "median": 151.7704725265503,
+        "min": 25.35867691040039,
+        "p95": 167.49130487442017,
+        "p99": 171.87974214553833,
+        "stddev": 22.65990028471743
+      },
+      "latency_note": "receive clock minus header.stamp; valid only when measured on the publishing host or against a synchronized clock",
+      "message_count": 534,
+      "observed_duration_s": 30.0,
+      "other_subscriber_count": 0,
+      "other_subscribers": [],
+      "period_ms": {
+        "count": 533,
+        "max": 98.54851399995823,
+        "mean": 56.13161490619103,
+        "median": 58.10386000030121,
+        "min": 8.127944000079879,
+        "p95": 77.69873859997459,
+        "p99": 88.93991488010215,
+        "stddev": 15.15890875853525
+      },
+      "publisher_count": 1,
+      "publisher_qos": [
+        {
+          "depth": 0,
+          "durability": "VOLATILE",
+          "history": "UNKNOWN",
+          "namespace": "_NODE_NAMESPACE_UNKNOWN_",
+          "node": "_NODE_NAME_UNKNOWN_",
+          "reliability": "BEST_EFFORT"
+        }
+      ],
+      "rate_hz": 17.8152722253089,
+      "rate_hz_over_window": 17.8,
+      "stamp_period_ms": {
+        "count": 533,
+        "max": 100.42333602905273,
+        "mean": 56.098014284030135,
+        "median": 66.57695770263672,
+        "min": 31.898021697998047,
+        "p95": 66.9804573059082,
+        "p99": 100.18542289733887,
+        "stddev": 17.744893273035643
+      },
+      "topic": "/cam_1/depth/camera_info",
+      "type": "CameraInfo"
+    },
+    {
+      "active_span_s": 29.923615415000313,
+      "content": {
+        "declared_points": 36908,
+        "extent_m": {
+          "x": [
+            0.8546834588050842,
+            6.067603588104248
+          ],
+          "y": [
+            -2.30696177482605,
+            3.095076560974121
+          ],
+          "z": [
+            -0.756906270980835,
+            2.3652758598327637
+          ]
+        },
+        "field_names": [
+          "x",
+          "y",
+          "z",
+          "rgb"
+        ],
+        "fields": [
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "x",
+            "offset": 0
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "y",
+            "offset": 4
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "z",
+            "offset": 8
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "rgb",
+            "offset": 12
+          }
+        ],
+        "frame_id": "cam_1_depth_frame",
+        "height": 1,
+        "is_bigendian": false,
+        "is_dense": true,
+        "payload_bytes": 590528,
+        "point_step": 16,
+        "row_step": 590528,
+        "valid_fraction": 1.0,
+        "valid_points": 36908,
+        "width": 36908
+      },
+      "content_last": {
+        "declared_points": 37666,
+        "extent_m": {
+          "x": [
+            0.9165914058685303,
+            7.67195463180542
+          ],
+          "y": [
+            -2.291478157043457,
+            3.095076560974121
+          ],
+          "z": [
+            -0.7892824411392212,
+            2.3652758598327637
+          ]
+        },
+        "field_names": [
+          "x",
+          "y",
+          "z",
+          "rgb"
+        ],
+        "fields": [
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "x",
+            "offset": 0
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "y",
+            "offset": 4
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "z",
+            "offset": 8
+          },
+          {
+            "count": 1,
+            "datatype": 7,
+            "name": "rgb",
+            "offset": 12
+          }
+        ],
+        "frame_id": "cam_1_depth_frame",
+        "height": 1,
+        "is_bigendian": false,
+        "is_dense": true,
+        "payload_bytes": 602656,
+        "point_step": 16,
+        "row_step": 602656,
+        "valid_fraction": 1.0,
+        "valid_points": 37666,
+        "width": 37666
+      },
+      "content_samples": 3,
+      "contract_rate_hz": {
+        "first_window_hz": 7.498974642286932,
+        "limits_hz": [
+          3.0,
+          40.0
+        ],
+        "median_hz": 15.00194574796841,
+        "min_hz": 7.498974642286932,
+        "p05_hz": 9.997888057513485,
+        "window_messages": 5,
+        "windows": 487,
+        "windows_outside_limits": 0
+      },
+      "dropouts": {
+        "count": 2,
+        "estimated_missed_messages": 4,
+        "threshold_ms": 148.73641874999066,
+        "worst_gap_ms": 160.08827399991787
+      },
+      "frame_cadence": {
+        "delivered_fraction": 0.546875,
+        "frame_rate_hz": 30.0,
+        "frames_per_gap": {
+          "1": 231,
+          "2": 161,
+          "3": 65,
+          "4": 22,
+          "5": 9,
+          "6": 1,
+          "9": 1
+        },
+        "off_grid_gaps": 0,
+        "skipped_frames": 406
+      },
+      "latency_ms": {
+        "count": 491,
+        "max": 391.8652534484863,
+        "mean": 263.6126126874003,
+        "median": 265.8843994140625,
+        "min": 87.93306350708008,
+        "p95": 348.7086296081543,
+        "p99": 363.66906166076666,
+        "stddev": 56.7399487935025
+      },
+      "latency_note": "receive clock minus header.stamp; valid only when measured on the publishing host or against a synchronized clock",
+      "message_count": 491,
+      "observed_duration_s": 30.0,
+      "other_subscriber_count": 1,
+      "other_subscribers": [
+        {
+          "namespace": "/",
+          "node": "rviz"
+        }
+      ],
+      "payload_bytes": {
+        "count": 491,
+        "max": 616960.0,
+        "mean": 601526.1588594705,
+        "median": 601376.0,
+        "min": 586016.0,
+        "p95": 611920.0,
+        "p99": 615201.6,
+        "stddev": 5723.782868797742
+      },
+      "period_ms": {
+        "count": 490,
+        "max": 160.08827399991787,
+        "mean": 61.06860288775574,
+        "median": 59.494567499996265,
+        "min": 36.764411999683944,
+        "p95": 82.92857795001963,
+        "p99": 111.024400120041,
+        "stddev": 14.027874330734534
+      },
+      "publisher_count": 1,
+      "publisher_qos": [
+        {
+          "depth": 0,
+          "durability": "VOLATILE",
+          "history": "UNKNOWN",
+          "namespace": "_NODE_NAMESPACE_UNKNOWN_",
+          "node": "_NODE_NAME_UNKNOWN_",
+          "reliability": "BEST_EFFORT"
+        }
+      ],
+      "rate_hz": 16.375026653843754,
+      "rate_hz_over_window": 16.366666666666667,
+      "stamp_period_ms": {
+        "count": 490,
+        "max": 299.96299743652344,
+        "mean": 60.95838838694047,
+        "median": 66.4529800415039,
+        "min": 32.66406059265137,
+        "p95": 133.33438634872437,
+        "p99": 166.6684651374817,
+        "stddev": 34.20153319920891
+      },
+      "topic": "/cam_1/depth/color/points",
+      "type": "PointCloud2"
+    }
+  ],
+  "transforms": {
+    "base_footprint": {
+      "child": "base_footprint",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.0,
+        0.0,
+        -0.07139999999999999
+      ]
+    },
+    "cam_1_color_frame": {
+      "child": "cam_1_color_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0034543568127218646,
+        0.00011681092716487717,
+        0.0013887066666105335,
+        0.9999930626099423
+      ],
+      "rpy_deg": [
+        0.3958591344115313,
+        0.012835747670668567,
+        0.15917940519806298
+      ],
+      "xyz_m": [
+        0.05504404614448548,
+        0.02533964332775879,
+        0.03775347169041634
+      ]
+    },
+    "cam_1_color_optical_frame": {
+      "child": "cam_1_color_optical_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.49902211169549787,
+        0.5010877618416092,
+        -0.49751659410172244,
+        0.5023596575810549
+      ],
+      "rpy_deg": [
+        -90.01283605403336,
+        0.39585912447775423,
+        -89.84090927897402
+      ],
+      "xyz_m": [
+        0.05504404614448548,
+        0.02533964332775879,
+        0.03775347169041634
+      ]
+    },
+    "cam_1_depth_frame": {
+      "child": "cam_1_depth_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "cam_1_depth_optical_frame": {
+      "child": "cam_1_depth_optical_frame",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.5,
+        0.4999999999999999,
+        -0.5,
+        0.5000000000000001
+      ],
+      "rpy_deg": [
+        -89.99999999999999,
+        0.0,
+        -89.99999999999999
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "cam_1_link": {
+      "child": "cam_1_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz_m": [
+        0.057105,
+        1.7948e-05,
+        0.03755
+      ]
+    },
+    "imu_link": {
+      "child": "imu_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        -0.7071067811865475,
+        0.7071067811865476,
+        4.329780281177466e-17,
+        4.329780281177467e-17
+      ],
+      "rpy_deg": [
+        180.0,
+        7.016709298534876e-15,
+        -90.00000000000001
+      ],
+      "xyz_m": [
+        -0.06,
+        0.01,
+        0.01
+      ]
+    },
+    "laser_link": {
+      "child": "laser_link",
+      "parent": "base_link",
+      "quaternion_xyzw": [
+        0.0,
+        0.0,
+        1.0,
+        6.123233995736766e-17
+      ],
+      "rpy_deg": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "xyz_m": [
+        0.0435,
+        5.26e-05,
+        0.11
+      ]
+    }
+  }
+}

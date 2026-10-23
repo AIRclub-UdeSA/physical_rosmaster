@@ -1,0 +1,11 @@
+Duration:          59.329107001s
+Messages:          7508
+Topic information: Topic: /tf_static | Type: tf2_msgs/msg/TFMessage | Count: 2 | Serialization Format: cdr
+                   Topic: /imu/data | Type: sensor_msgs/msg/Imu | Count: 593 | Serialization Format: cdr
+                   Topic: /voltage | Type: std_msgs/msg/Float32 | Count: 594 | Serialization Format: cdr
+                   Topic: /tf | Type: tf2_msgs/msg/TFMessage | Count: 1188 | Serialization Format: cdr
+                   Topic: /scan | Type: sensor_msgs/msg/LaserScan | Count: 442 | Serialization Format: cdr
+                   Topic: /odom | Type: nav_msgs/msg/Odometry | Count: 594 | Serialization Format: cdr
+                   Topic: /joint_states | Type: sensor_msgs/msg/JointState | Count: 594 | Serialization Format: cdr
+                   Topic: /cam_1/color/image_raw | Type: sensor_msgs/msg/Image | Count: 1741 | Serialization Format: cdr
+                   Topic: /cam_1/color/camera_info | Type: sensor_msgs/msg/CameraInfo | Count: 1760 | Serialization Format: cdr
