@@ -1,11 +1,11 @@
 # `leo` deployment: 2026-10-13
 
-Fourth and last fleet robot, set up from a fresh Yahboom factory Raspberry Pi 5
+Fourth fleet robot, set up from a fresh Yahboom factory Raspberry Pi 5
 card by following [the per-robot setup guide](../docs/setup_guide_ros2_humble_autostart.md)
 and [autostart setup](../docs/autostart_setup.md), the same day as
 [`raphael`](raphael_deployment_2026-10-13.md). The setup was done on a home
-network; the robot's default network is the faculty's `Privada`, like the
-rest of the fleet (see [Network](#network)).
+network; the robot's default network is the faculty's `Privada`, like
+`raphael` (see [Network](#network)).
 
 Per the runbook, this did not repeat the one-time platform validation done on
 `x3-c`: no motor live-loss probe, no active-link-loss test, no consumer-parity
