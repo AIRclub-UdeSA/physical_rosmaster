@@ -26,6 +26,8 @@ repository:
 | `rosmaster-platform.env.example` | `/etc/rosmaster/platform.env` (filled in, never committed) | per-robot device identities and RGB effect choice |
 | `rosmaster-platform.service.example` | `/etc/systemd/system/rosmaster-platform.service` | the main strict-launch unit |
 | `rosmaster-platform-ready.service.example` | `/etc/systemd/system/rosmaster-platform-ready.service` | the oneshot verify-then-signal unit |
+| `rosmaster-shutdown-listen.sh` | `/usr/local/sbin/rosmaster-shutdown-listen` | optional, [section 7](#7-power-off-over-ros-2-systemshutdown): waits for a `/system/shutdown` request, then stops the platform and powers off |
+| `rosmaster-shutdown-listener.service.example` | `/etc/systemd/system/rosmaster-shutdown-listener.service` | optional, section 7: the always-restarting unit that runs it |
 
 The `.example` suffix marks a template; strip it on install. `platform.env`
 holds per-robot values and must never be committed, matching how the udev
@@ -180,6 +182,108 @@ sudo systemctl daemon-reload
 
 The scripts under `/usr/local/sbin/` and `/etc/rosmaster/platform.env` are
 harmless to leave in place; remove them only if you want a clean uninstall.
+
+## 7. Power off over ROS 2 (`/system/shutdown`)
+
+Optional, and installed separately from the platform units (issue #18). With
+it, you can power the robot off without SSH by publishing one message from
+any machine on the robot's `ROS_DOMAIN_ID`.
+
+> **`poweroff` halts only the Raspberry Pi. It does not stop the motors.**
+> The motor controller is battery-powered and has no link-loss watchdog
+> ([known issue](troubleshooting/known_issues/motor-controller-no-link-loss-watchdog.md)).
+> This listener stops `rosmaster-platform.service` first, so the driver sends
+> its best-effort zero commands, and only then powers off. If the driver
+> had already died, nothing sent those zeros. **Switch main power off once
+> the Pi has halted, every time.**
+
+How it works:
+
+- `rosmaster-shutdown-listener.service` (host) runs
+  `rosmaster-shutdown-listen`, which runs
+  `tools/ros_shutdown_listener.py` inside the container with `docker exec`,
+  from the workspace checkout, like the contract probe.
+- The listener subscribes to `/system/shutdown` (`std_msgs/msg/String`,
+  reliable, volatile) and exits with status 42 only when a message's `data`
+  equals this robot's confirmation value. That value is its hostname, or
+  `ROSMASTER_SHUTDOWN_CONFIRM` from `platform.env` when set. Anything else is
+  logged and ignored.
+- On status 42 the host script logs the request, runs `systemctl stop
+  rosmaster-platform.service` (the same `ExecStop` sweep as any stop), logs
+  the result, and runs `systemctl poweroff`. If the stop fails or times out,
+  it logs an error and **powers off anyway**.
+- Any other exit (container restarted, listener killed) restarts the unit
+  after 5 s, indefinitely. The unit isn't bound to the platform unit, so it
+  still works after the platform has crashed.
+- A latched request can't fire at boot: the subscription is volatile, so it
+  never receives a message published before it started.
+
+The confirmation value guards against accidents (a stray message, a laptop
+on the wrong domain), not deliberate misuse. Anything on the robot's domain
+that knows the value can power it off. When other people's code shares the
+domain (the competition), set a non-obvious `ROSMASTER_SHUTDOWN_CONFIRM` in
+`platform.env` and restart the unit, or disable the unit for the event.
+
+### Install
+
+The listener runs from the container's checkout, so update that checkout to
+a revision that includes `tools/ros_shutdown_listener.py` first (no
+`colcon build` needed: `tools/` isn't installed). Copy the two files to the
+host as in [section 3](#3-install), then on the robot's host:
+
+```bash
+sudo install -m 0755 -o root -g root rosmaster-shutdown-listen.sh /usr/local/sbin/rosmaster-shutdown-listen
+sudo install -m 0644 -o root -g root rosmaster-shutdown-listener.service.example /etc/systemd/system/rosmaster-shutdown-listener.service
+sudo systemctl daemon-reload
+sudo systemd-analyze verify rosmaster-shutdown-listener.service
+sudo systemctl enable --now rosmaster-shutdown-listener.service
+sudo journalctl -u rosmaster-shutdown-listener.service --no-pager -l -n 5
+```
+
+The journal should show `Listening on /system/shutdown for this robot's
+confirmation value`.
+
+### Trigger it from a laptop
+
+On the robot's domain (`raphael` 10, `donatello` 11, `leo` 12, `mikey` 13,
+`splinter` 14), with the robot's hostname as `data`:
+
+```bash
+ROS_DOMAIN_ID=13 ros2 topic pub -1 /system/shutdown std_msgs/msg/String "{data: mikey}"
+```
+
+Always pass `-1`. It waits for the listener, sends once, and exits. Without
+it, `ros2 topic pub` republishes every second until stopped, and the robot
+would power off again on every boot while that laptop process is still
+running.
+
+Expected journal on the robot (`journalctl -b -1` after the next boot, since
+the Pi halts):
+
+```text
+[system_shutdown_listener]: Confirmed shutdown request on /system/shutdown ('mikey'); handing over to the host to stop the platform and power off
+rosmaster-shutdown: Shutdown requested over ROS (/system/shutdown); stopping rosmaster-platform.service so the driver sends its zero commands
+rosmaster-platform-stop: Clean stop: all platform processes exited on SIGTERM
+rosmaster-shutdown: rosmaster-platform.service stopped after <N>s
+rosmaster-shutdown: Powering off the host. This halts only the Pi: switch main power off once it has halted
+```
+
+A message with any other `data` logs `Ignored /system/shutdown request
+'<value>': it does not match this robot's confirmation value` and changes
+nothing.
+
+### Roll back
+
+```bash
+sudo systemctl disable --now rosmaster-shutdown-listener.service
+sudo rm /etc/systemd/system/rosmaster-shutdown-listener.service
+sudo systemctl daemon-reload
+docker exec rosmaster_humble pkill -TERM -f ros_shutdown_listener.py
+```
+
+The last line clears the in-container listener. Stopping a `docker exec`
+client doesn't kill what it started; the unit itself clears leftovers each
+time it starts.
 
 ## Related documentation
 
