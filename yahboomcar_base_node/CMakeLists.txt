@@ -41,6 +41,9 @@ install(DIRECTORY include/
 if(BUILD_TESTING)
   ament_add_gtest(test_x3_odometry test/test_x3_odometry.cpp)
   ament_target_dependencies(test_x3_odometry tf2 nav_msgs geometry_msgs builtin_interfaces)
+  ament_add_gtest(test_reset_odom test/test_reset_odom.cpp)
+  ament_target_dependencies(test_reset_odom
+    rclcpp tf2 tf2_ros diagnostic_msgs nav_msgs sensor_msgs std_srvs geometry_msgs builtin_interfaces)
 endif()
 
 ament_package()
