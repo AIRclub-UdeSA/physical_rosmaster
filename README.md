@@ -36,6 +36,8 @@ excluded, and the hardware-only extensions below are additional.
 
 The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available. `/imu/data_raw`, the Madgwick filter's input, is published by the simulator as well.
 
+The hardware-only service `/base_node/reset_odom` (`std_srvs/Trigger`) zeroes the `/odom` pose, for example between runs, without restarting the platform: `ros2 service call /base_node/reset_odom std_srvs/srv/Trigger`. Call it while the robot is stationary: the zeroed pose is published with the next `joint_states`, so a moving robot reports zero plus one integration step. If the wheel encoders have not started or are stale, the pose is still zeroed, but `/odom` stays silent until they resume, and the response message says so. The `odom` → `base_footprint` transform jumps back to the origin, so restart anything that accumulates `/odom` (SLAM, an EKF) after calling it.
+
 ## Motor transport and failure boundary
 
 Runtime commit `a08b097` derives motor-controller liveness only from
@@ -305,8 +307,10 @@ The gate is:
 
 Item 4's full measured protocol, operator tools, and item 5 remain open.
 Autostart itself is no longer gated on them, though: it has already been
-designed, installed, enabled, and reboot-validated on `x3-c`, `mikey`, `raphael` and `leo` — see
-[docs/autostart_setup.md](docs/autostart_setup.md). Lifted-motion diagnosis
+designed, installed, enabled, and reboot-validated on `x3-c`, `mikey` and
+`leo`, and installed on `raphael` with a warm reboot validated but one cold
+boot missing the boot-ready signal ([record](robot_artifacts/raphael_deployment_2026-10-13.md))
+— see [docs/autostart_setup.md](docs/autostart_setup.md). Lifted-motion diagnosis
 also found a repeatable ~2-4x front-right-vs-back-left actuation imbalance,
 most pronounced below roughly `0.10 m/s`/`0.60 rad/s` per-wheel-equivalent;
 the owner is tracking this as an accepted known platform characteristic (see
