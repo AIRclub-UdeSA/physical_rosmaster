@@ -20,7 +20,7 @@ neither is required reading to bring up a new robot.
 
 Work through the sections in order on a factory card. If a unit was already
 partly set up, each section starts with a check so you can skip what is done.
-`x3-c`, `mikey`, `raphael` and `leo` were all set up this way; the `x3-c` rebuild is recorded in
+`x3-c`, `mikey`, `raphael`, `leo` and `splinter` were all set up this way; the `x3-c` rebuild is recorded in
 [robot_artifacts/pr3_recovery_session_2026-08-30.md](../robot_artifacts/pr3_recovery_session_2026-08-30.md).
 
 ## 1. Preconditions
@@ -110,7 +110,7 @@ host keys mean one robot's key identifies all of them. Set a unique identity
 before anything else:
 
 ```bash
-# Pick a name nobody else uses (the fleet so far: x3-c, mikey, raphael, leo).
+# Pick a name nobody else uses (the fleet so far: x3-c, mikey, raphael, leo, splinter).
 sudo hostnamectl set-hostname <name>
 sudo sed -i 's/^127\.0\.1\.1\([[:space:]]\+\)yahboom$/127.0.1.1\1<name>/' /etc/hosts
 
@@ -131,7 +131,7 @@ sudo timedatectl set-timezone America/Argentina/Buenos_Aires
 ```
 
 Also pick this robot's `ROS_DOMAIN_ID` now, so two robots on the same network
-don't share a graph (`raphael` uses 10, `x3-c` 11, `leo` 12, `mikey` 13). You need it in
+don't share a graph (`raphael` uses 10, `x3-c` 11, `leo` 12, `mikey` 13, `splinter` 14). You need it in
 section 5.
 
 The factory `/etc/hosts` also pins `raw.githubusercontent.com` to

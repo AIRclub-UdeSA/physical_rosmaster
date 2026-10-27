@@ -309,9 +309,9 @@ The gate is:
 
 Item 4's full measured protocol, operator tools, and item 5 remain open.
 Autostart itself is no longer gated on them, though: it has already been
-designed, installed, enabled, and reboot-validated on `x3-c`, `mikey` and
-`leo`, and installed on `raphael` with a warm reboot validated but one cold
-boot missing the boot-ready signal ([record](robot_artifacts/raphael_deployment_2026-10-13.md))
+designed, installed, enabled, and reboot-validated on `x3-c`, `mikey`, `leo`
+and `splinter`, and installed on `raphael` with a warm reboot validated but
+one cold boot missing the boot-ready signal ([record](robot_artifacts/raphael_deployment_2026-10-13.md))
 — see [docs/autostart_setup.md](docs/autostart_setup.md). Lifted-motion diagnosis
 also found a repeatable ~2-4x front-right-vs-back-left actuation imbalance,
 most pronounced below roughly `0.10 m/s`/`0.60 rad/s` per-wheel-equivalent;
