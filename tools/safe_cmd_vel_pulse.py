@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import math
+import signal
 import sys
 import time
 
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
+from rclpy.signals import SignalHandlerOptions
 
 
 MAX_LINEAR_SPEED = 0.20
@@ -144,10 +146,19 @@ def validate_graph(
     )
 
 
+def raise_keyboard_interrupt(_signum, _frame) -> None:
+    """Turn SIGTERM into the same stop path as Ctrl-C."""
+    raise KeyboardInterrupt
+
+
 def main() -> int:
     """Run the pulse, always attempting multiple zero commands on exit."""
     args = parse_args()
-    rclpy.init()
+    # rclpy's own SIGINT/SIGTERM handlers shut the context down before the
+    # finally block runs, so the zero commands would fail with "publisher's
+    # context is invalid". Keep the context alive and stop via Python instead.
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    signal.signal(signal.SIGTERM, raise_keyboard_interrupt)
     node = Node("safe_cmd_vel_pulse")
     publisher = node.create_publisher(Twist, "/cmd_vel", 10)
     zero = Twist()
@@ -182,6 +193,10 @@ def main() -> int:
             print("ERROR: %s" % exc, file=sys.stderr)
         return 2
     finally:
+        # A second Ctrl-C (or a SIGTERM after one) would otherwise raise
+        # KeyboardInterrupt here and cut the zero commands short.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         publish_repeatedly(node, publisher, zero, 5)
         node.destroy_node()
         if rclpy.ok():
