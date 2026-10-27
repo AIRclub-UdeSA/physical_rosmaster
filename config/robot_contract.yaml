@@ -134,6 +134,18 @@ host_control:
     confirmation: hostname
     effect: stop rosmaster-platform.service, then systemctl poweroff; main power stays on
 
+# Hardware-only services. Unlike host_control, these are part of the platform
+# graph and meant for team code, but the simulator has no equivalent, so they
+# are kept out of hardware_extensions (which must match the simulator's ledger).
+# The physical contract probe neither requires nor grades them.
+hardware_services:
+  /base_node/reset_odom:
+    type: std_srvs/srv/Trigger
+    # Call it while the robot is stationary. The odom -> base_footprint
+    # transform jumps back to the origin, so restart anything that accumulates
+    # /odom (SLAM, an EKF) afterwards. See README.md for stale encoders.
+    effect: zero the /odom pose (x, y, yaw) without restarting the platform
+
 excluded_simulator_interfaces:
   - /clock
   - /ground_truth/odom
