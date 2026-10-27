@@ -133,20 +133,23 @@ Monotonic boot times for the cold boot:
 ```
 
 The NTP step came after the probe and no false encoder timeout was logged.
-Compared with `raphael`'s failed cold boot, the camera delivered depth frames
-at full rate from the start; `raphael`'s probe judged the first depth frames
-six seconds after the camera connected, while they were still arriving about
-1.4 s apart. One pass here does not show how often that happens.
+Compared with `raphael`'s failed cold boot, the probe here passed 2.0 s after
+the camera connected; `raphael`'s probe judged the first depth frames six
+seconds after the camera connected, while they were still arriving about 1.4 s
+apart. The depth rate was not measured here, and one pass does not show how
+often that happens.
 
 ## Point cloud rate floor
 
 The first probe in the lifted smoke check and the first manual ready-service
 run both failed only on `/cam_1/depth/color/points` (2.31 Hz and 2.50 Hz), and
-`raphael`'s first manual run failed the same way (2.31 Hz). Measured with
+`raphael`'s first manual run failed the same way (see its record). Measured with
 `ros2 topic hz`, the cloud averaged about 8.2 Hz. The probe judges a topic on
 the five messages after it subscribes, so occasional gaps in the cloud stream
-can fall inside that window. Both reruns passed, and both automatic boots
-passed on the first try. No gate was changed.
+can fall inside that window. Both reruns passed, and both automatic boots on
+2026-10-13 passed on the first try; the first boot on 2026-10-14 failed on the
+same floor (see [First boot on the faculty network](#first-boot-on-the-faculty-network-2026-10-14)).
+No gate was changed.
 
 ## Network
 
