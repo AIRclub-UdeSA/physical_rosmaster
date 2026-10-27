@@ -29,7 +29,9 @@ partly set up, each section starts with a check so you can skip what is done.
 - It is a Yahboom factory-image Raspberry Pi 5 (Debian 12) with Docker and
   `Rosmaster_Lib` V3.3.9 installed on the host
   (`/home/pi/software/py_install/Rosmaster_Lib/Rosmaster_Lib.py`).
-- You can SSH to it **by IP address**. Every factory card has the hostname
+- It joins the target WiFi network on its own at boot (see
+  [Put the robot on the WiFi](#put-the-robot-on-the-wifi) below), and you can
+  SSH to it **by IP address**. Every factory card has the hostname
   `yahboom`, so `yahboom.local` can answer for any robot on the network
   (including a working one). Don't use it until the unit has its own name
   (section 2).
@@ -56,6 +58,48 @@ active container or image can consume most of the disk while Docker reports no
 reclaimable space, and `docker system prune -a` does not shrink an active
 container's writable layer. Diagnose the actual consumer first; see
 [Root filesystem full causing LightDM login loop and Docker growth](troubleshooting/known_issues/root-filesystem-full-login-loop.md).
+
+### Put the robot on the WiFi
+
+A factory card does not join your network by itself, so this step is done on
+the robot's own desktop (monitor, keyboard and mouse), with the NetworkManager
+applet, before anything over SSH:
+
+1. Click the network icon and open **Edit Connections**.
+2. Select the robot's factory WiFi connection (the network the card ships
+   configured for), go to the **General** tab, uncheck **Connect automatically
+   with priority**, and save. Otherwise the robot can keep preferring it at
+   boot.
+3. Click the network icon again and connect to the target network
+   (`<TARGET_WIFI_SSID>`). If it is not listed, use **Advanced Options →
+   Connect to Hidden Wi-Fi Network** and create the connection there; it then
+   also appears under the network icon.
+4. Enter the WiFi password when asked. Never commit it, or the network name, to
+   this repository.
+5. Go to **Edit Connections → `<TARGET_WIFI_SSID>` → General** and check
+   **Connect automatically with priority**.
+6. List the saved connections and check that `<TARGET_WIFI_SSID>` connects
+   automatically and the factory one does not:
+
+   ```bash
+   nmcli -f NAME,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show
+   ```
+
+   A second profile for the same network (for example one saved without the
+   password) can shadow the working one; delete it, along with any network
+   used only during setup, with `sudo nmcli connection delete "<NAME>"`.
+7. Turn WiFi power saving off for that connection. With it on, the Pi adds
+   100-300 ms ping spikes:
+
+   ```bash
+   sudo nmcli connection modify "<TARGET_WIFI_SSID>" 802-11-wireless.powersave 2
+   ```
+
+8. Reboot and confirm the robot joins `<TARGET_WIFI_SSID>` by itself.
+
+Read the robot's IP on its own terminal with `hostname -I`. Check it again
+after the reboots in sections 2 and 3: a new `machine-id` can give the robot a
+different DHCP address.
 
 ## 2. Give the robot its own identity
 
