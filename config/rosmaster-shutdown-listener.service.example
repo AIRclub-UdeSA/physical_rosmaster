@@ -1,0 +1,31 @@
+# Powers the host off on a confirmed ROS 2 request on /system/shutdown
+# (std_msgs/String carrying this robot's hostname, or the
+# ROSMASTER_SHUTDOWN_CONFIRM value from platform.env), without SSH: stops
+# rosmaster-platform.service first so the driver sends its zero commands,
+# then runs `systemctl poweroff`. Main power must still be switched off by
+# hand afterwards; poweroff halts only the Pi.
+#
+# Deliberately not bound to rosmaster-platform.service: it must keep working
+# when the platform has crashed. Restart=always reconnects it after a
+# container restart and waits out the container at boot.
+#
+# Install as /etc/systemd/system/rosmaster-shutdown-listener.service, then:
+#   systemctl daemon-reload
+#   systemctl enable --now rosmaster-shutdown-listener.service
+# See docs/autostart_setup.md section 7.
+
+[Unit]
+Description=ROSMASTER X3 ROS 2 shutdown request listener (/system/shutdown)
+After=docker.service
+Requires=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/rosmaster/platform.env
+ExecStart=/usr/local/sbin/rosmaster-shutdown-listen
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

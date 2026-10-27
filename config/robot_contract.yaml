@@ -117,6 +117,23 @@ hardware_extensions:
 simulator_published_extensions:
   - /imu/data_raw
 
+# Host control, not part of the platform graph and not for team code: a
+# host-side listener (config/rosmaster-shutdown-listener.service.example,
+# tools/ros_shutdown_listener.py) that stops the platform and powers the Pi off
+# (issue #18). Kept out of hardware_extensions, which must match the simulator's
+# ledger. The physical contract probe neither requires nor grades it.
+host_control:
+  /system/shutdown:
+    type: std_msgs/msg/String
+    direction: input
+    qos:
+      reliability: reliable
+      durability: volatile
+    # data must equal the robot's hostname, or ROSMASTER_SHUTDOWN_CONFIRM from
+    # /etc/rosmaster/platform.env when set; anything else is logged and ignored.
+    confirmation: hostname
+    effect: stop rosmaster-platform.service, then systemctl poweroff; main power stays on
+
 excluded_simulator_interfaces:
   - /clock
   - /ground_truth/odom
