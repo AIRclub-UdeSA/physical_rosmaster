@@ -168,7 +168,8 @@ python3 -m pytest -q \
   tools/test_physical_contract_probe.py \
   tools/test_robot_contract_matches_simulator.py \
   tools/test_sensor_capability_probe.py \
-  tools/test_safe_cmd_vel_pulse.py
+  tools/test_safe_cmd_vel_pulse.py \
+  tools/test_wifi_test.py
 )
 ```
 
@@ -326,6 +327,7 @@ rather than a blocker.
 - [docs/sensor_capabilities.md](docs/sensor_capabilities.md): measured sensor rates, latency, and noise;
 - [docs/depth_camera_calibration.md](docs/depth_camera_calibration.md): Astra depth scale, noise, and range limits;
 - [docs/odometry_validation.md](docs/odometry_validation.md): encoder-only odometry validation;
+- [tools/wifi_test/README.md](tools/wifi_test/README.md): checking a WiFi network (such as the competition router) for camera, bags and teleop;
 - [agents/README.md](agents/README.md): index of historical pre-cleanup audit and validation evidence;
 - [docs/troubleshooting/README.md](docs/troubleshooting/README.md): incident history and known issues.
 

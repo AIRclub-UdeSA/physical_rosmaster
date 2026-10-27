@@ -53,7 +53,8 @@ There are two separate contexts, and most contributions only need the first:
     tools/test_physical_contract_probe.py \
     tools/test_robot_contract_matches_simulator.py \
     tools/test_sensor_capability_probe.py \
-    tools/test_safe_cmd_vel_pulse.py
+    tools/test_safe_cmd_vel_pulse.py \
+    tools/test_wifi_test.py
   ```
 
   The current workstation needs plugin autoload disabled because an unrelated
