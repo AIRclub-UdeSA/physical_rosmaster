@@ -16,10 +16,12 @@ External projects own all behavior and run on top of the same public topics and 
   the implementation state now;
 - autostart: accepted and enabled on `x3-c`, `mikey` (deployed
   2026-10-09; see
-  [robot_artifacts/mikey_deployment_2026-10-09.md](robot_artifacts/mikey_deployment_2026-10-09.md))
-  and `raphael` (deployed 2026-10-13, warm reboot only; one cold boot missed
+  [robot_artifacts/mikey_deployment_2026-10-09.md](robot_artifacts/mikey_deployment_2026-10-09.md)),
+  `raphael` (deployed 2026-10-13, warm reboot only; one cold boot missed
   the boot-ready signal, see
-  [robot_artifacts/raphael_deployment_2026-10-13.md](robot_artifacts/raphael_deployment_2026-10-13.md)).
+  [robot_artifacts/raphael_deployment_2026-10-13.md](robot_artifacts/raphael_deployment_2026-10-13.md))
+  and `leo` (deployed 2026-10-13, warm and cold boot; see
+  [robot_artifacts/leo_deployment_2026-10-13.md](robot_artifacts/leo_deployment_2026-10-13.md)).
   Additional robots follow
   [docs/setup_guide_ros2_humble_autostart.md](docs/setup_guide_ros2_humble_autostart.md)
   then [docs/autostart_setup.md](docs/autostart_setup.md) directly — no
