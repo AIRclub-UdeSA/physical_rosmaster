@@ -140,9 +140,10 @@ time and they all stop together. FL started at 3.38 s, FR at 3.88 s, BL at
 4.4-4.5 s. BR is the slowest wheel to start and, in the pulses where it did
 turn, moved about half as far as the others (0.62 and 0.68 rad). In the first
 strafe it also had to reverse from the previous forward pulse. This is the
-low-speed stiction characteristic already recorded for `x3-c` and `mikey`,
-here concentrated on one wheel, not a wiring fault: BR's sign is correct in
-every pulse where it moved. No tool, gate or driver setting was changed, and
+low-speed behavior already recorded for `x3-c` and `mikey`, here concentrated
+on one wheel. It was not diagnosed further (stiction, motor or drag, at about
+10.5 V); it is not a wiring fault, since BR's sign is correct in every pulse
+where it moved. No tool, gate or driver setting was changed, and
 the stronger `y=0.20` pulse was not needed.
 
 ## Battery
