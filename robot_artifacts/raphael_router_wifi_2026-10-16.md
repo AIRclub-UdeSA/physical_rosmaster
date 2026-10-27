@@ -8,6 +8,10 @@ where a workstation could not record a bag from the robot.
 Run with the scripts now in [tools/wifi_test](../tools/wifi_test/README.md)
 (an earlier Spanish draft of the same commands). Raw evidence:
 [raphael_router_wifi_2026-10-16/](raphael_router_wifi_2026-10-16/).
+Only the probe and bag numbers can be checked against those files. The
+`iperf3`, ping, multicast and workstation-rate results in [Link](#link), the
+ping column in [Load steps](#load-steps) and the [Commands](#commands) table
+were transcribed by hand from the scripts' console output, which was not kept.
 
 ## Result
 
