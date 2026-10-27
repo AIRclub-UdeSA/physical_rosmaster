@@ -249,13 +249,20 @@ On the robot's domain (`raphael` 10, `donatello` 11, `leo` 12, `mikey` 13,
 `splinter` 14), with the robot's hostname as `data`:
 
 ```bash
-ROS_DOMAIN_ID=13 ros2 topic pub -1 /system/shutdown std_msgs/msg/String "{data: mikey}"
+ROS_DOMAIN_ID=13 timeout 15 ros2 topic pub -1 /system/shutdown std_msgs/msg/String "{data: mikey}"
 ```
 
 Always pass `-1`. It waits for the listener, sends once, and exits. Without
 it, `ros2 topic pub` republishes every second until stopped, and the robot
 would power off again on every boot while that laptop process is still
 running.
+
+Keep the `timeout` too. `-1` waits for the listener with no limit (Humble's
+`ros2 topic pub` has no maximum wait), so if the robot is off, still booting
+or on another network, the command sits there and powers the robot off as
+soon as its listener comes up. With `timeout 15` it gives up instead: exit
+status 124 means no listener was found and nothing was sent (the
+`publisher's context is invalid` line it prints then is harmless).
 
 Expected journal on the robot (`journalctl -b -1` after the next boot, since
 the Pi halts):
