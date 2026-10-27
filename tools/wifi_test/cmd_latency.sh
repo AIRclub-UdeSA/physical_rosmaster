@@ -12,4 +12,4 @@ exec > >(tee -a "$RESULTS/cmd_${LABEL}_$(date +%H%M).txt") 2>&1
 step "cmd_vel under load $LABEL (5 pulses of 1.5 s, ~20 s)"
 echo "   robot: $ROBOT   ROS_DOMAIN_ID: $ROS_DOMAIN_ID (the robot on this domain moves)"
 python3 "$WIFI_TEST_DIR/cmd_latency.py" --confirm-wheels-lifted
-expect "never DID NOT STOP; compare against the same robot with no remote load"
+expect "never DID NOT STOP, and few or no /odom STALE pulses; compare against the same robot with no remote load"
