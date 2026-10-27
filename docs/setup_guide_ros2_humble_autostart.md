@@ -78,16 +78,8 @@ applet, before anything over SSH:
    this repository.
 5. Go to **Edit Connections → `<TARGET_WIFI_SSID>` → General** and check
    **Connect automatically with priority**.
-6. Turn WiFi power saving off for that connection. With it on, the Pi adds
-   100-300 ms ping spikes:
-
-   ```bash
-   sudo nmcli connection modify "<TARGET_WIFI_SSID>" 802-11-wireless.powersave 2
-   ```
-
-7. Reboot and confirm the robot joins `<TARGET_WIFI_SSID>` by itself.
-8. List the saved connections and check that `<TARGET_WIFI_SSID>` connects
-   automatically with the highest priority, and the factory one does not:
+6. List the saved connections and check that `<TARGET_WIFI_SSID>` connects
+   automatically and the factory one does not:
 
    ```bash
    nmcli -f NAME,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show
@@ -96,6 +88,14 @@ applet, before anything over SSH:
    A second profile for the same network (for example one saved without the
    password) can shadow the working one; delete it, along with any network
    used only during setup, with `sudo nmcli connection delete "<NAME>"`.
+7. Turn WiFi power saving off for that connection. With it on, the Pi adds
+   100-300 ms ping spikes:
+
+   ```bash
+   sudo nmcli connection modify "<TARGET_WIFI_SSID>" 802-11-wireless.powersave 2
+   ```
+
+8. Reboot and confirm the robot joins `<TARGET_WIFI_SSID>` by itself.
 
 Read the robot's IP on its own terminal with `hostname -I`. Check it again
 after the reboots in sections 2 and 3: a new `machine-id` can give the robot a
