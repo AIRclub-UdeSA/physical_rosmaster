@@ -18,13 +18,16 @@
 from __future__ import annotations
 
 import math
+import signal
 import time
 from typing import Callable, Optional
 
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Twist
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import Imu, JointState, MagneticField
 from std_msgs.msg import Bool, Float32, Int32
 
@@ -716,16 +719,59 @@ def cleanup_driver(driver: YahboomCarDriver) -> None:
         driver.get_logger().error("ROS node destruction raised: %s" % exc)
 
 
+# How long the main loop can wait for a callback before rechecking for a
+# stop signal. The driver's own timers usually wake it sooner.
+STOP_POLL_SECONDS = 0.1
+
+
+def ignore_stop_signals() -> None:
+    """Keep a later SIGINT or SIGTERM from interrupting the final stop."""
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+
+# A platform stop sends the driver both signals, in either order: the stop
+# sweep sends SIGTERM to the launch and then to the driver, and the launch
+# sends SIGINT to its children. Only the first one counts. Later ones are
+# ignored so they cannot cut the final zero commands short; SIGKILL (the
+# stop sweep's escalation after its grace period) still bounds the cleanup.
+#
+# The handler raises nothing. A KeyboardInterrupt raised from a signal
+# handler lands in whatever code is running, and Python discards it inside a
+# __del__ (seen in rclpy's Future.__del__). With later signals ignored, that
+# would leave the driver spinning until SIGKILL, with no zero commands at all.
+def install_stop_signal_handlers() -> Callable[[], bool]:
+    """Route SIGINT and SIGTERM to a stop flag; return a reader for it."""
+    received = []
+
+    def record_stop(signum, _frame) -> None:
+        ignore_stop_signals()
+        received.append(signum)
+
+    signal.signal(signal.SIGINT, record_stop)
+    signal.signal(signal.SIGTERM, record_stop)
+    return lambda: bool(received)
+
+
 def main() -> None:
     """Run the X3 driver and guarantee a stop attempt during shutdown."""
-    rclpy.init()
+    # rclpy's own handlers would shut the context down on SIGTERM and turn
+    # every SIGINT into a KeyboardInterrupt, so a second signal could
+    # interrupt cleanup_driver, which catches only Exception. Own both
+    # signals here instead.
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    stop_requested = install_stop_signal_handlers()
     driver: Optional[YahboomCarDriver] = None
     try:
         driver = YahboomCarDriver("driver_node")
-        rclpy.spin(driver)
-    except KeyboardInterrupt:
-        pass
+        executor = SingleThreadedExecutor()
+        executor.add_node(driver)
+        while not stop_requested():
+            executor.spin_once(timeout_sec=STOP_POLL_SECONDS)
     finally:
+        # Also covers a terminal fault exit, where no signal has arrived yet
+        # but the stop sweep may send one while the zeros are going out.
+        ignore_stop_signals()
         if driver is not None:
             cleanup_driver(driver)
         if rclpy.ok():
