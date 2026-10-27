@@ -54,6 +54,7 @@ There are two separate contexts, and most contributions only need the first:
     tools/test_robot_contract_matches_simulator.py \
     tools/test_sensor_capability_probe.py \
     tools/test_safe_cmd_vel_pulse.py \
+    tools/test_wifi_test.py \
     tools/test_ros_shutdown_listener.py
   ```
 
@@ -99,8 +100,11 @@ imports it. That is a compatibility/version gate, not supply-chain attestation.
 - **Close the remaining validation gates.** `x3-c` already passed the core
   robot deployment, startup-absence/restoration/live-loss sequence, and a
   qualitative floor pass; autostart is separately installed and
-  reboot-validated on `x3-c` and `mikey`. Still open: the full 3-rep measured
-  floor protocol with external measurement, operator-tool
+  reboot-validated on `x3-c`, `mikey` and `leo`, and installed on `raphael`
+  with a warm reboot validated but one cold boot missing the boot-ready signal
+  (see [its record](robot_artifacts/raphael_deployment_2026-10-13.md)). Still
+  open: the full 3-rep measured floor protocol with external measurement,
+  operator-tool
   (joystick/keyboard/calibration) checks, and a simulator/physical
   consumer-parity proof. Use
   [Rollout status](README.md#rollout-status),

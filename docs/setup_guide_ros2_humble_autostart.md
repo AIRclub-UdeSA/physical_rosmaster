@@ -20,7 +20,7 @@ neither is required reading to bring up a new robot.
 
 Work through the sections in order on a factory card. If a unit was already
 partly set up, each section starts with a check so you can skip what is done.
-`x3-c` and `mikey` were both set up this way; the `x3-c` rebuild is recorded in
+`x3-c`, `mikey`, `raphael` and `leo` were all set up this way; the `x3-c` rebuild is recorded in
 [robot_artifacts/pr3_recovery_session_2026-08-30.md](../robot_artifacts/pr3_recovery_session_2026-08-30.md).
 
 ## 1. Preconditions
@@ -29,7 +29,9 @@ partly set up, each section starts with a check so you can skip what is done.
 - It is a Yahboom factory-image Raspberry Pi 5 (Debian 12) with Docker and
   `Rosmaster_Lib` V3.3.9 installed on the host
   (`/home/pi/software/py_install/Rosmaster_Lib/Rosmaster_Lib.py`).
-- You can SSH to it **by IP address**. Every factory card has the hostname
+- It joins the target WiFi network on its own at boot (see
+  [Put the robot on the WiFi](#put-the-robot-on-the-wifi) below), and you can
+  SSH to it **by IP address**. Every factory card has the hostname
   `yahboom`, so `yahboom.local` can answer for any robot on the network
   (including a working one). Don't use it until the unit has its own name
   (section 2).
@@ -57,6 +59,48 @@ reclaimable space, and `docker system prune -a` does not shrink an active
 container's writable layer. Diagnose the actual consumer first; see
 [Root filesystem full causing LightDM login loop and Docker growth](troubleshooting/known_issues/root-filesystem-full-login-loop.md).
 
+### Put the robot on the WiFi
+
+A factory card does not join your network by itself, so this step is done on
+the robot's own desktop (monitor, keyboard and mouse), with the NetworkManager
+applet, before anything over SSH:
+
+1. Click the network icon and open **Edit Connections**.
+2. Select the robot's factory WiFi connection (the network the card ships
+   configured for), go to the **General** tab, uncheck **Connect automatically
+   with priority**, and save. Otherwise the robot can keep preferring it at
+   boot.
+3. Click the network icon again and connect to the target network
+   (`<TARGET_WIFI_SSID>`). If it is not listed, use **Advanced Options →
+   Connect to Hidden Wi-Fi Network** and create the connection there; it then
+   also appears under the network icon.
+4. Enter the WiFi password when asked. Never commit it, or the network name, to
+   this repository.
+5. Go to **Edit Connections → `<TARGET_WIFI_SSID>` → General** and check
+   **Connect automatically with priority**.
+6. List the saved connections and check that `<TARGET_WIFI_SSID>` connects
+   automatically and the factory one does not:
+
+   ```bash
+   nmcli -f NAME,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show
+   ```
+
+   A second profile for the same network (for example one saved without the
+   password) can shadow the working one; delete it, along with any network
+   used only during setup, with `sudo nmcli connection delete "<NAME>"`.
+7. Turn WiFi power saving off for that connection. With it on, the Pi adds
+   100-300 ms ping spikes:
+
+   ```bash
+   sudo nmcli connection modify "<TARGET_WIFI_SSID>" 802-11-wireless.powersave 2
+   ```
+
+8. Reboot and confirm the robot joins `<TARGET_WIFI_SSID>` by itself.
+
+Read the robot's IP on its own terminal with `hostname -I`. Check it again
+after the reboots in sections 2 and 3: a new `machine-id` can give the robot a
+different DHCP address.
+
 ## 2. Give the robot its own identity
 
 Every card flashed from the factory image has the same hostname (`yahboom`),
@@ -66,7 +110,7 @@ host keys mean one robot's key identifies all of them. Set a unique identity
 before anything else:
 
 ```bash
-# Pick a name nobody else uses (the fleet so far: x3-c, mikey).
+# Pick a name nobody else uses (the fleet so far: x3-c, mikey, raphael, leo).
 sudo hostnamectl set-hostname <name>
 sudo sed -i 's/^127\.0\.1\.1\([[:space:]]\+\)yahboom$/127.0.1.1\1<name>/' /etc/hosts
 
@@ -87,7 +131,7 @@ sudo timedatectl set-timezone America/Argentina/Buenos_Aires
 ```
 
 Also pick this robot's `ROS_DOMAIN_ID` now, so two robots on the same network
-don't share a graph (`x3-c` uses 11, `mikey` uses 13). You need it in
+don't share a graph (`raphael` uses 10, `x3-c` 11, `leo` 12, `mikey` 13). You need it in
 section 5.
 
 The factory `/etc/hosts` also pins `raw.githubusercontent.com` to
@@ -206,6 +250,38 @@ docker run -dit --name rosmaster_humble --net=host --privileged \
 The container's only persistent process is `bash` (PID 1). The platform runs
 inside it through `docker exec`, so a missing `ROS_DOMAIN_ID` here is easy to
 miss later; check `docker exec rosmaster_humble printenv ROS_DOMAIN_ID`.
+
+The image's `/root/.bashrc` overrides that value with `export ROS_DOMAIN_ID=20`
+and sources the factory `~/imu_ws`, `~/gmapping_ws` and `~/yahboomcar_ws`
+overlays. The autostart scripts use non-interactive `bash -lc`, which stops
+before those lines, but an interactive `docker exec -it rosmaster_humble bash`
+(or a Dev Containers attach) lands on domain 20 and won't see the robot's
+topics. Keep a copy, then comment those lines out and source the workspace
+after `/opt/ros/humble` instead. The block matches any line that exports
+`ROS_DOMAIN_ID=20` or sources one of those overlays (with `~` or `/root`, any
+trailing text), keeps the first backup if you rerun it, and doesn't add the
+`source` line twice:
+
+```bash
+docker exec rosmaster_humble bash -c '
+set -e
+mkdir -p /root/rosmaster-recovery-backups
+b=/root/rosmaster-recovery-backups/bashrc.factory-$(date +%F)
+[ -e "$b" ] || cp -a /root/.bashrc "$b"
+sed -i -E \
+  -e "s,^[[:space:]]*export[[:space:]]+ROS_DOMAIN_ID=20\b.*,# &," \
+  -e "s,^[[:space:]]*(source|\.)[[:space:]]+(~|/root)/(imu_ws|gmapping_ws|yahboomcar_ws)/install/setup\.bash.*,# &," \
+  /root/.bashrc
+line="[ -f /root/yahboomcar_ws/install/setup.bash ] && source /root/yahboomcar_ws/install/setup.bash"
+grep -qxF "$line" /root/.bashrc || echo "$line" >> /root/.bashrc
+'
+docker exec rosmaster_humble bash -ic 'echo "$ROS_DOMAIN_ID"; echo "$AMENT_PREFIX_PATH"'
+```
+
+The first line should be this robot's id, not 20. `AMENT_PREFIX_PATH` should
+list the `/root/yahboomcar_ws/install/...` packages but no `imu_ws` or
+`gmapping_ws`. If a factory line has a form the patterns don't match, `sed`
+leaves it alone, so check `grep -nE 'ROS_DOMAIN_ID|_ws' /root/.bashrc` too.
 
 Run every ROS command on the robot inside this container, for example with
 `docker exec -it rosmaster_humble bash`. The host has no ROS install, and a
