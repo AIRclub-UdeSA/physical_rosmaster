@@ -157,10 +157,30 @@ def test_interrupted_pulse_still_publishes_zero(stop_signal):
     if importlib.util.find_spec("rclpy") is None:
         pytest.skip("ROS 2 Python runtime unavailable: rclpy")
     with isolated_ros_domain() as domain:
-        run_interrupted_pulse(ros_env(domain), stop_signal)
+        run_interrupted_pulse(ros_env(domain), [stop_signal])
 
 
-def run_interrupted_pulse(env, stop_signal):
+@pytest.mark.parametrize(
+    "stop_signals",
+    [
+        [signal.SIGINT, signal.SIGINT],
+        [signal.SIGTERM, signal.SIGINT],
+    ],
+    ids=["INT-then-INT", "TERM-then-INT"],
+)
+def test_second_stop_signal_does_not_cut_the_zeros_short(stop_signals):
+    """A second Ctrl-C while the zeros go out must not skip any of them."""
+    if importlib.util.find_spec("rclpy") is None:
+        pytest.skip("ROS 2 Python runtime unavailable: rclpy")
+    with isolated_ros_domain() as domain:
+        run_interrupted_pulse(ros_env(domain), stop_signals, min_zeros=5)
+
+
+# Lands the second signal inside the finally block's 5 zeros (20 ms apart).
+SECOND_SIGNAL_DELAY = 0.02
+
+
+def run_interrupted_pulse(env, stop_signals, min_zeros=1):
     """Interrupt a running pulse and require zeros at the fake driver."""
     driver = subprocess.Popen(
         [sys.executable, "-c", FAKE_DRIVER],
@@ -184,15 +204,19 @@ def run_interrupted_pulse(env, stop_signal):
             env=env,
         )
         read_line_until(driver.stdout, "MOVING", time.monotonic() + 20)
-        pulse.send_signal(stop_signal)
+        for index, stop_signal in enumerate(stop_signals):
+            if index:
+                time.sleep(SECOND_SIGNAL_DELAY)
+            pulse.send_signal(stop_signal)
         _, stderr = pulse.communicate(timeout=10)
         assert pulse.returncode == 2, stderr
         assert "context is invalid" not in stderr, stderr
+        assert "Traceback" not in stderr, stderr
 
         driver.stdin.write("report\n")
         driver.stdin.flush()
         report = read_line_until(driver.stdout, "ZEROS", time.monotonic() + 10)
-        assert int(report.split()[1]) >= 1, stderr
+        assert int(report.split()[1]) >= min_zeros, stderr
     finally:
         for process in (pulse, driver):
             if process is not None and process.poll() is None:

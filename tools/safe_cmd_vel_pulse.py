@@ -193,6 +193,10 @@ def main() -> int:
             print("ERROR: %s" % exc, file=sys.stderr)
         return 2
     finally:
+        # A second Ctrl-C (or a SIGTERM after one) would otherwise raise
+        # KeyboardInterrupt here and cut the zero commands short.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         publish_repeatedly(node, publisher, zero, 5)
         node.destroy_node()
         if rclpy.ok():
