@@ -16,7 +16,12 @@ External projects own all behavior and run on top of the same public topics and 
   the implementation state now;
 - autostart: accepted and enabled on `x3-c`, `mikey` (deployed
   2026-10-09; see
-  [robot_artifacts/mikey_deployment_2026-10-09.md](robot_artifacts/mikey_deployment_2026-10-09.md))
+  [robot_artifacts/mikey_deployment_2026-10-09.md](robot_artifacts/mikey_deployment_2026-10-09.md)),
+  `raphael` (deployed 2026-10-13, warm reboot only; one cold boot missed
+  the boot-ready signal, see
+  [robot_artifacts/raphael_deployment_2026-10-13.md](robot_artifacts/raphael_deployment_2026-10-13.md)),
+  `leo` (deployed 2026-10-13, warm and cold boot; see
+  [robot_artifacts/leo_deployment_2026-10-13.md](robot_artifacts/leo_deployment_2026-10-13.md))
   and `splinter` (deployed 2026-10-21, warm and cold boot; see
   [robot_artifacts/splinter_deployment_2026-10-21.md](robot_artifacts/splinter_deployment_2026-10-21.md)).
   Additional robots follow

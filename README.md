@@ -34,7 +34,9 @@ excluded, and the hardware-only extensions below are additional.
 | `/cam_1/color/*` | Calibrated RGB8 color image and camera info |
 | `/cam_1/depth/*` | Metric 32FC1 depth, camera info, and XYZRGB cloud |
 
-The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available. `/imu/data_raw`, the Madgwick filter's input, is published by the simulator as well.
+The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely relabeled. Hardware-only topics such as `/diagnostics`, `/imu/mag`, `/vel_raw`, `/voltage`, `/edition`, `/Buzzer`, `/RGBLight`, and `/scan_filtered` remain available. `/imu/data_raw`, the Madgwick filter's input, is published by the simulator as well. Outside the platform graph, an optional host listener powers the robot off on `/system/shutdown` (`std_msgs/String` equal to the robot's hostname). It isn't for team code; see [docs/autostart_setup.md section 7](docs/autostart_setup.md#7-power-off-over-ros-2-systemshutdown).
+
+The hardware-only service `/base_node/reset_odom` (`std_srvs/Trigger`) zeroes the `/odom` pose, for example between runs, without restarting the platform: `ros2 service call /base_node/reset_odom std_srvs/srv/Trigger`. Call it while the robot is stationary: the zeroed pose is published with the next `joint_states`, so a moving robot reports zero plus one integration step. If the wheel encoders have not started or are stale, the pose is still zeroed, but `/odom` stays silent until they resume, and the response message says so. The `odom` → `base_footprint` transform jumps back to the origin, so restart anything that accumulates `/odom` (SLAM, an EKF) after calling it.
 
 ## Motor transport and failure boundary
 
@@ -166,7 +168,9 @@ python3 -m pytest -q \
   tools/test_physical_contract_probe.py \
   tools/test_robot_contract_matches_simulator.py \
   tools/test_sensor_capability_probe.py \
-  tools/test_safe_cmd_vel_pulse.py
+  tools/test_safe_cmd_vel_pulse.py \
+  tools/test_wifi_test.py \
+  tools/test_ros_shutdown_listener.py
 )
 ```
 
@@ -305,8 +309,10 @@ The gate is:
 
 Item 4's full measured protocol, operator tools, and item 5 remain open.
 Autostart itself is no longer gated on them, though: it has already been
-designed, installed, enabled, and reboot-validated on `x3-c`, `mikey` and `splinter` — see
-[docs/autostart_setup.md](docs/autostart_setup.md). Lifted-motion diagnosis
+designed, installed, enabled, and reboot-validated on `x3-c`, `mikey`, `leo`
+and `splinter`, and installed on `raphael` with a warm reboot validated but
+one cold boot missing the boot-ready signal ([record](robot_artifacts/raphael_deployment_2026-10-13.md))
+— see [docs/autostart_setup.md](docs/autostart_setup.md). Lifted-motion diagnosis
 also found a repeatable ~2-4x front-right-vs-back-left actuation imbalance,
 most pronounced below roughly `0.10 m/s`/`0.60 rad/s` per-wheel-equivalent;
 the owner is tracking this as an accepted known platform characteristic (see
@@ -322,6 +328,7 @@ rather than a blocker.
 - [docs/sensor_capabilities.md](docs/sensor_capabilities.md): measured sensor rates, latency, and noise;
 - [docs/depth_camera_calibration.md](docs/depth_camera_calibration.md): Astra depth scale, noise, and range limits;
 - [docs/odometry_validation.md](docs/odometry_validation.md): encoder-only odometry validation;
+- [tools/wifi_test/README.md](tools/wifi_test/README.md): checking a WiFi network (such as the competition router) for camera, bags and teleop;
 - [agents/README.md](agents/README.md): index of historical pre-cleanup audit and validation evidence;
 - [docs/troubleshooting/README.md](docs/troubleshooting/README.md): incident history and known issues.
 
