@@ -28,7 +28,7 @@ excluded, and the hardware-only extensions below are additional.
 | `/cmd_vel` | `geometry_msgs/Twist` input; no default publisher |
 | `/joint_states` | Position and velocity for four simulator-named wheel joints |
 | `/odom` | Encoder-only mecanum odometry, `odom` → `base_footprint` |
-| `/tf` | Wheel odometry owns `odom` → `base_footprint` |
+| `/tf` | Wheel odometry owns `odom` → `base_footprint`, unless a consumer switches it off at runtime (see `pub_odom_tf` below) |
 | `/imu/data` | Madgwick-filtered IMU; `use_mag=false`; no IMU TF |
 | `/scan` | A1 scan in `laser_link`, after physical cable/self-return masking |
 | `/cam_1/color/*` | Calibrated RGB8 color image and camera info |
@@ -38,7 +38,13 @@ The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely re
 
 The hardware-only service `/base_node/reset_odom` (`std_srvs/Trigger`) zeroes the `/odom` pose, for example between runs, without restarting the platform: `ros2 service call /base_node/reset_odom std_srvs/srv/Trigger`. Call it while the robot is stationary: the zeroed pose is published with the next `joint_states`, so a moving robot reports zero plus one integration step. If the wheel encoders have not started or are stale, the pose is still zeroed, but `/odom` stays silent until they resume, and the response message says so. The `odom` → `base_footprint` transform jumps back to the origin, so restart anything that accumulates `/odom` (SLAM, an EKF) after calling it.
 
-The `odom` → `base_footprint` transform can be switched off and back on at runtime, for a consumer that publishes its own (an EKF that fuses `/odom` with the IMU): `ros2 param set /base_node pub_odom_tf false`, and `true` to restore it. `/odom` keeps publishing either way. The change lives only in the running node: restarting the platform, or the robot, brings the transform back, which the boot-time contract probe requires. Whoever switches it off owns that transform until they switch it back on; while nothing publishes it, anything that needs the robot's pose through TF (RViz, SLAM, Nav2) stops working.
+The `odom` → `base_footprint` transform can be switched off and back on at runtime, for a consumer that publishes its own (an EKF that fuses `/odom` with the IMU): `ros2 param set /base_node pub_odom_tf false`, and `true` to restore it. `/odom` keeps publishing either way. Whoever switches it off owns that transform until they switch it back on, and while nothing publishes it, anything that needs the robot's pose through TF (RViz, SLAM, Nav2) stops working. In order:
+
+1. Switch it off before the consumer starts publishing `odom` → `base_footprint`; otherwise the edge has two publishers.
+2. Switch it back on when the consumer exits.
+3. If the consumer crashed without restoring it, `ros2 param set /base_node pub_odom_tf true` brings it back; no platform restart is needed.
+
+Read the current state with `ros2 param get /base_node pub_odom_tf`, or in the `odom_tf` key (`published` / `disabled by pub_odom_tf parameter`) of the `yahboomcar_base_node: wheel encoder odometry` status on `/diagnostics`. The change lives only in the running node: a platform restart brings back `true`, which the boot-time contract probe requires, but it also starts a new ready cycle, so it is not the way to undo the switch.
 
 ## Motor transport and failure boundary
 

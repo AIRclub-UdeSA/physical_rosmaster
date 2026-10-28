@@ -148,7 +148,13 @@ private:
             enabled ? "Publishing" : "No longer publishing",
             odom_frame_.c_str(), base_footprint_frame_.c_str());
         }
+        // A plain bool is enough: the node runs on a single-threaded executor,
+        // so this callback never overlaps a publish, the same assumption that
+        // lets reset_odom mutate x_pos_ and heading_.
         pub_odom_tf_ = enabled;
+        if (diagnostic_publisher_) {
+          publish_encoder_diagnostic();
+        }
       }
     }
     return result;
@@ -174,6 +180,13 @@ private:
     timeout.key = "timeout_seconds";
     timeout.value = std::to_string(joint_state_timeout_);
     status.values.push_back(timeout);
+
+    // Says why odom -> base_footprint is missing from /tf while a consumer has
+    // switched it off, so RViz, SLAM or Nav2 losing the transform is traceable.
+    diagnostic_msgs::msg::KeyValue odom_tf;
+    odom_tf.key = "odom_tf";
+    odom_tf.value = pub_odom_tf_ ? "published" : "disabled by pub_odom_tf parameter";
+    status.values.push_back(odom_tf);
 
     array.status.push_back(status);
     diagnostic_publisher_->publish(array);
