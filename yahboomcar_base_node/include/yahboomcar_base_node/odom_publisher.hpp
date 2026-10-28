@@ -29,6 +29,7 @@
 #include "diagnostic_msgs/msg/diagnostic_status.hpp"
 #include "diagnostic_msgs/msg/key_value.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -120,12 +121,39 @@ public:
       std::bind(
         &OdomPublisher::handle_reset_odom, this,
         std::placeholders::_1, std::placeholders::_2));
+    // pub_odom_tf can be switched at runtime, so a consumer that fuses its own
+    // odometry (an EKF) can own odom -> base_footprint without restarting the
+    // platform:  ros2 param set /base_node pub_odom_tf false
+    // The change is not persisted: a platform restart brings back the launch
+    // value (true), which is also what the boot-time contract probe requires.
+    parameter_callback_ = this->add_on_set_parameters_callback(
+      std::bind(&OdomPublisher::handle_set_parameters, this, std::placeholders::_1));
     set_encoder_health(
       diagnostic_msgs::msg::DiagnosticStatus::WARN,
       "Waiting for canonical wheel encoder joint states");
   }
 
 private:
+  rcl_interfaces::msg::SetParametersResult handle_set_parameters(
+    const std::vector<rclcpp::Parameter> & parameters)
+  {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    for (const rclcpp::Parameter & parameter : parameters) {
+      if (parameter.get_name() == "pub_odom_tf") {
+        const bool enabled = parameter.as_bool();
+        if (enabled != pub_odom_tf_) {
+          RCLCPP_INFO(
+            this->get_logger(), "%s %s -> %s TF",
+            enabled ? "Publishing" : "No longer publishing",
+            odom_frame_.c_str(), base_footprint_frame_.c_str());
+        }
+        pub_odom_tf_ = enabled;
+      }
+    }
+    return result;
+  }
+
   void publish_encoder_diagnostic()
   {
     diagnostic_msgs::msg::DiagnosticArray array;
@@ -405,6 +433,7 @@ private:
   rclcpp::TimerBase::SharedPtr sensor_watchdog_timer_;
   rclcpp::TimerBase::SharedPtr diagnostic_timer_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_odom_service_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
   yahboomcar_base_node::MecanumParams mecanum_params_{0.0325, 0.080, 0.085};

@@ -38,6 +38,8 @@ The cloud is transformed into x-forward `cam_1_depth_frame`; it is not merely re
 
 The hardware-only service `/base_node/reset_odom` (`std_srvs/Trigger`) zeroes the `/odom` pose, for example between runs, without restarting the platform: `ros2 service call /base_node/reset_odom std_srvs/srv/Trigger`. Call it while the robot is stationary: the zeroed pose is published with the next `joint_states`, so a moving robot reports zero plus one integration step. If the wheel encoders have not started or are stale, the pose is still zeroed, but `/odom` stays silent until they resume, and the response message says so. The `odom` → `base_footprint` transform jumps back to the origin, so restart anything that accumulates `/odom` (SLAM, an EKF) after calling it.
 
+The `odom` → `base_footprint` transform can be switched off and back on at runtime, for a consumer that publishes its own (an EKF that fuses `/odom` with the IMU): `ros2 param set /base_node pub_odom_tf false`, and `true` to restore it. `/odom` keeps publishing either way. The change lives only in the running node: restarting the platform, or the robot, brings the transform back, which the boot-time contract probe requires. Whoever switches it off owns that transform until they switch it back on; while nothing publishes it, anything that needs the robot's pose through TF (RViz, SLAM, Nav2) stops working.
+
 ## Motor transport and failure boundary
 
 Runtime commit `a08b097` derives motor-controller liveness only from
