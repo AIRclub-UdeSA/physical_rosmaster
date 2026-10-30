@@ -8,7 +8,9 @@ driver_node:
     ylinear_limit: 1.0
     angular_limit: 5.0
     cmd_vel_timeout: 0.5
-    encoder_cpr: 1040.0
+    # 11 lines x 4 edges x 1:30 gearbox = 1320. Measured by hand-turning each
+    # wheel 10 turns on splinter, 2026-10-30 (issue #69): 1313-1319.
+    encoder_cpr: 1320.0
     # Validated on x3-c by isolated forward hand rotations on 2026-08-20.
     # Raw packet fields are zero-based m1..m4. Output is FL, FR, BL, BR.
     encoder_order: [0, 2, 1, 3]

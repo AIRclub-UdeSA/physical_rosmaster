@@ -70,7 +70,7 @@ class YahboomCarDriver(Node):
         self.declare_parameter("ylinear_limit", 1.0)
         self.declare_parameter("angular_limit", 5.0)
         self.declare_parameter("cmd_vel_timeout", 0.5)
-        self.declare_parameter("encoder_cpr", 1040.0)
+        self.declare_parameter("encoder_cpr", 1320.0)
         self.declare_parameter("encoder_order", [0, 2, 1, 3])
         self.declare_parameter("encoder_signs", [1.0, 1.0, 1.0, 1.0])
         self.declare_parameter("encoder_max_delta_ticks", 5000)
