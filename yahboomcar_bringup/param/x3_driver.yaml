@@ -4,9 +4,11 @@ driver_node:
     imu_link: imu_link
     Prefix: ""
     serial_port: /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
-    xlinear_limit: 1.0
-    ylinear_limit: 1.0
-    angular_limit: 5.0
+    # JAR Challenge limits (issue #71). Each axis is clamped on its own, so
+    # x and y at the limit together drive at about 0.71 m/s.
+    xlinear_limit: 0.5
+    ylinear_limit: 0.5
+    angular_limit: 1.0
     cmd_vel_timeout: 0.5
     # 11 lines x 4 edges x 1:30 gearbox = 1320. Measured by hand-turning each
     # wheel 10 turns on splinter, 2026-10-30 (issue #69): 1313-1319.
