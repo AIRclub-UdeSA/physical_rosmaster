@@ -32,7 +32,7 @@ External projects own all behavior and run on top of the same public topics and 
 ## Runtime graph
 
 - `Mcnamu_driver_X3.py` owns motor I/O, `/cmd_vel` subscription, watchdog, `/joint_states`, raw IMU/magnetometer, `/vel_raw`, voltage, firmware telemetry, and controller health on `/diagnostics`.
-- `base_node_X3.cpp` consumes only canonical wheel encoders and publishes `/odom`, `odom -> base_footprint`, and encoder health on `/diagnostics`. There is no `/vel_raw` fallback.
+- `base_node_X3.cpp` consumes only canonical wheel encoders and publishes `/odom`, `odom -> base_footprint` (unless a consumer switches it off at runtime with the `pub_odom_tf` parameter), and encoder health on `/diagnostics`. There is no `/vel_raw` fallback.
 - `robot_state_publisher` expands the one X3 Xacro. It owns platform transforms through `cam_1_link`.
 - `imu_filter_madgwick` converts `/imu/data_raw` to `/imu/data`, with `use_mag=false` and `publish_tf=false`.
 - `sllidar_ros2` publishes cable-masked `/scan` in `laser_link`; rejected physical returns remain visible on `/scan_filtered`.

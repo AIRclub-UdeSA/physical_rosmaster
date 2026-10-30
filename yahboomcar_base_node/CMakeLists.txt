@@ -19,9 +19,11 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(rclcpp  REQUIRED)
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(tf2_msgs REQUIRED)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
@@ -29,7 +31,8 @@ endif()
 include_directories(include)
 
 add_executable(base_node_X3 src/base_node_X3.cpp)
-ament_target_dependencies(base_node_X3 rclcpp tf2 tf2_ros diagnostic_msgs nav_msgs sensor_msgs std_srvs geometry_msgs builtin_interfaces)
+ament_target_dependencies(base_node_X3 rclcpp tf2 tf2_ros diagnostic_msgs nav_msgs sensor_msgs std_srvs geometry_msgs builtin_interfaces
+  rcl_interfaces)
 install(TARGETS
   base_node_X3
   DESTINATION lib/${PROJECT_NAME}
@@ -43,7 +46,12 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_x3_odometry tf2 nav_msgs geometry_msgs builtin_interfaces)
   ament_add_gtest(test_reset_odom test/test_reset_odom.cpp)
   ament_target_dependencies(test_reset_odom
-    rclcpp tf2 tf2_ros diagnostic_msgs nav_msgs sensor_msgs std_srvs geometry_msgs builtin_interfaces)
+    rclcpp tf2 tf2_ros diagnostic_msgs nav_msgs sensor_msgs std_srvs geometry_msgs builtin_interfaces
+    rcl_interfaces)
+  ament_add_gtest(test_odom_tf_toggle test/test_odom_tf_toggle.cpp)
+  ament_target_dependencies(test_odom_tf_toggle
+    rclcpp tf2 tf2_ros tf2_msgs diagnostic_msgs nav_msgs sensor_msgs std_srvs geometry_msgs
+    builtin_interfaces rcl_interfaces)
 endif()
 
 ament_package()
