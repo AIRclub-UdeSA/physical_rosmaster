@@ -88,7 +88,7 @@ never connect.
 | D | + Image → `bash load_step.sh D` | |
 | E | + PointCloud2 → `bash load_step.sh E` | |
 | Bags | RViz as in D → `bash bag_compare.sh light`, `bash bag_compare.sh heavy` | workstation >= 90% of the robot per topic |
-| Commands | wheels lifted, RViz as in D, then E → `WHEELS_LIFTED=yes bash cmd_latency.sh D`, `WHEELS_LIFTED=yes bash cmd_latency.sh E` | start/stop delay; never `DID NOT STOP`; a `/odom STALE` pulse is not counted (no `/odom` for over 0.5 s), so rerun if most are |
+| Commands | wheels lifted, RViz as in D, then E → `WHEELS_LIFTED=yes bash cmd_latency.sh D`, `WHEELS_LIFTED=yes bash cmd_latency.sh E` | start/stop delay; all pulses counted; `DID NOT STOP` or `/odom STALE` (no `/odom` for over 0.5 s) ends the run with zeros and a non-zero exit, so the median and max cover only the pulses before it |
 
 `load_step.sh` measures on the robot (`sensor_capability_probe.py`), so the
 latency does not depend on the workstation clock: what it shows is whether

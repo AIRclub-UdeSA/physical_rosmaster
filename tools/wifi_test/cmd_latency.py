@@ -7,8 +7,12 @@ A pulse during which /odom stopped arriving for more than ODOM_STALE_S is
 reported as stale and left out of the summary, since its times would come from
 an old velocity.
 
+The run stops at the first stale /odom or the first pulse that does not stop:
+it sends zeros, prints what it counted and exits non-zero, also if no pulse was
+counted (1) or it was interrupted (2).
+
 ONLY WITH THE WHEELS LIFTED. Refuses to start while another /cmd_vel publisher
-exists.
+exists or /odom is stale.
 
 Usage: python3 cmd_latency.py --confirm-wheels-lifted [--pulses 5] [--speed 0.10]
 """
@@ -95,9 +99,18 @@ def main(argv=None):
 
     forward, zero = Twist(), Twist()
     forward.linear.x = args.speed
-    starts, stops = [], []
+    starts, stops, stale = [], [], 0
+    status = 0
     try:
         for pulse in range(1, args.pulses + 1):
+            # The driver has no watchdog on /odom: never command motion blind.
+            age = odom_age(state["at"], time.monotonic())
+            if age > ODOM_STALE_S:
+                print(f"pulse {pulse}: /odom STALE (no message for {age * 1000:.0f} ms);"
+                      " not sent, stopping", flush=True)
+                stale += 1
+                status = 1
+                break
             began, started, max_age = time.monotonic(), None, 0.0
             while time.monotonic() - began < PULSE_S:
                 publisher.publish(forward)
@@ -115,17 +128,23 @@ def main(argv=None):
                     stopped = time.monotonic() - zeroed
             if max_age > ODOM_STALE_S:
                 print(f"pulse {pulse}: /odom STALE (no message for {max_age * 1000:.0f} ms);"
-                      " not counted", flush=True)
-                spin_for(1.0)
-                continue
+                      " not counted, stopping", flush=True)
+                stale += 1
+                status = 1
+                break
             start_text = f"{started * 1000:5.0f} ms" if started is not None else "  DID NOT MOVE"
             stop_text = f"{stopped * 1000:5.0f} ms" if stopped is not None else "  DID NOT STOP"
             print(f"pulse {pulse}: start {start_text}   stop {stop_text}", flush=True)
+            if stopped is None:
+                print(">>> the robot did not stop on zeros, stopping", flush=True)
+                status = 1
+                break
             if started is not None:
                 starts.append(started)
-            if stopped is not None:
                 stops.append(stopped)
             spin_for(1.0)
+    except KeyboardInterrupt:
+        status = 2
     finally:
         # A second Ctrl-C (or a SIGTERM after one) would otherwise raise
         # KeyboardInterrupt here and cut the zero commands short.
@@ -138,11 +157,13 @@ def main(argv=None):
         if rclpy.ok():
             rclpy.shutdown()
 
+    print(f"counted {len(starts)} of {args.pulses} pulses ({stale} stale)")
     for name, values in (("start", starts), ("stop", stops)):
         if values:
             print(f"{name}: median {statistics.median(values) * 1000:.0f} ms,"
                   f" max {max(values) * 1000:.0f} ms")
+    return status or (0 if starts else 1)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
