@@ -8,6 +8,12 @@ where a workstation could not record a bag from the robot.
 Run with the scripts now in [tools/wifi_test](../tools/wifi_test/README.md)
 (an earlier Spanish draft of the same commands). Raw evidence:
 [raphael_router_wifi_2026-10-16/](raphael_router_wifi_2026-10-16/).
+Only the probe results and the bag message counts can be checked against those
+files. The `iperf3`, ping, multicast and workstation-rate results in
+[Link](#link), the signal and bitrate in [Setup](#setup), the bag sizes in
+[Bags](#bags), the ping column in [Load steps](#load-steps) and the
+[Commands](#commands) table were transcribed by hand from the scripts' console
+output, which was not kept.
 
 ## Result
 
@@ -95,6 +101,9 @@ to start, per its deployment record).
 | --- | --- | --- |
 | D | 716 / 768 ms | 321 / 332 ms |
 | E | 1186 / 1237 ms | 692 / 900 ms |
+
+These came from `cmd_latency.py` before it checked that `/odom` was fresh, and
+step E had a 1.5 s ping spike, so rerun the tool before quoting them.
 
 The operator then drove the lifted robot with `teleop_twist_keyboard`
 (0.1 m/s): responsive with the image only, noticeably delayed with the cloud.
