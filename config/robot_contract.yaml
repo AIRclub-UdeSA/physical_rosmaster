@@ -85,6 +85,8 @@ topics:
 
 tf:
   dynamic:
+    # A consumer can switch this edge off at runtime with the pub_odom_tf
+    # parameter of /base_node (see README.md); the boot-time probe requires it.
     - parent: odom
       child: base_footprint
       owner: yahboomcar_base_node
@@ -133,6 +135,20 @@ host_control:
     # /etc/rosmaster/platform.env when set; anything else is logged and ignored.
     confirmation: hostname
     effect: stop rosmaster-platform.service, then systemctl poweroff; main power stays on
+
+# Hardware-only services. Unlike host_control, these are part of the platform
+# graph and meant for team code, but the simulator has no equivalent, so they
+# are kept out of hardware_extensions (which must match the simulator's ledger).
+# The physical contract probe neither requires nor grades them.
+hardware_services:
+  /base_node/reset_odom:
+    type: std_srvs/srv/Trigger
+    owner: yahboomcar_base_node
+    # Call it while the robot is stationary. The odom -> base_footprint
+    # transform jumps back to the origin, so restart anything that accumulates
+    # /odom (SLAM, an EKF) afterwards. success is true even with stale encoders
+    # (only the message differs); see README.md for that case.
+    effect: zero the /odom pose (x, y, yaw) without restarting the platform
 
 excluded_simulator_interfaces:
   - /clock
