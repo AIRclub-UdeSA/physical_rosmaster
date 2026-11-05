@@ -161,8 +161,10 @@ def generate_launch_description():
                 "scan_mode": "Sensitivity",
                 # Physical cable/self-return preprocessing. /scan is canonical;
                 # rejected returns remain observable on /scan_filtered.
-                "cable_angle_min": 152.0,
-                "cable_angle_max": 170.0,
+                # Widened 2026-11-05 after the LiDAR swap: cable returns measured at raw
+                # 140-184 deg (old mask 152-170 let them through).
+                "cable_angle_min": 138.0,
+                "cable_angle_max": 190.0,
                 "cable_max_distance": 0.14,
             }
         ],
