@@ -54,6 +54,7 @@ There are two separate contexts, and most contributions only need the first:
     tools/test_robot_contract_matches_simulator.py \
     tools/test_sensor_capability_probe.py \
     tools/test_safe_cmd_vel_pulse.py \
+    tools/test_tilt_teleop_core.py \
     tools/test_wifi_test.py \
     tools/test_ros_shutdown_listener.py
   ```
